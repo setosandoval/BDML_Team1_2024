@@ -29,7 +29,8 @@ p_load(rio,        # For importing/exporting data
        visdat,     # For visualizing missing data
        stargazer,  # For creating tables/output to LaTeX
        boot,       # For bootstrap
-       MASS)       # For regression calculations
+       MASS,       # For regression calculations
+       dplyr)      
 
 
 
@@ -49,6 +50,14 @@ db_clean <- db %>%
          !is.na(y_salary_m)) %>% # Remove missing values in salary
   mutate(log_wage = log(y_salary_m)) # Create a new column with the log of wages
 
+# Variables to keep
+db_clean <- db_clean[, c("y_salary_m", "age", "sex", "hoursWorkUsual", "formal", "relab", "maxEducLevel", "estrato1", "sizeFirm", "log_wage")]
+
+
+# Missings
+colSums(is.na(db_clean[, c("log_wage", "age", "sex", "hoursWorkUsual", "formal", "relab", "maxEducLevel", "estrato1", "sizeFirm")]))
+db_clean <- db_clean %>%
+  filter(!is.na(maxEducLevel))  # Remove missing values             
 
 
 # 2. DESCRIPTIVE STATISTICS ==================================================
@@ -194,12 +203,15 @@ stargazer(model_2, type = "latex",
 
 # B) CONDITIONAL MODEL ------------------------------------------------------
 
+# Model 
+form_3 <- log_wage ~ female + relab + hoursWorkUsual + formal + sizeFirm
+
 # i) FWL
 # Regress log wage on the control variables
-resid_lw_controls <- lm(log_wage ~ relab + hoursWorkUsual + formal, data = db_clean)$residuals
+resid_lw_controls <- lm(log_wage ~ relab + hoursWorkUsual + formal + sizeFirm, data = db_clean)$residuals
 
 # Regress female on the control variables
-resid_female_controls <- lm(female ~ relab + hoursWorkUsual + formal, data = db_clean)$residuals
+resid_female_controls <- lm(female ~ relab + hoursWorkUsual + formal + sizeFirm, data = db_clean)$residuals
 
 # Regress residuals of log wage on residuals of female
 fwl_model <- lm(resid_lw_controls ~ resid_female_controls)
@@ -214,10 +226,10 @@ boot_fwl_fn <- function(data, index) {
   data_sample <- data[index, ]
   
   # Step 1: Regress log wage on controls
-  resid_lw_controls <- lm(log_wage ~ relab + hoursWorkUsual + clase + formal, data = data_sample)$residuals
+  resid_lw_controls <- lm(log_wage ~ relab + hoursWorkUsual + formal + sizeFirm, data = data_sample)$residuals
   
   # Step 2: Regress female on controls
-  resid_female_controls <- lm(female ~ relab + hoursWorkUsual + clase + formal, data = data_sample)$residuals
+  resid_female_controls <- lm(female ~ relab + hoursWorkUsual + formal + sizeFirm, data = data_sample)$residuals
   
   # Step 3: Regress residuals of log wage on residuals of female
   fwl_model <- lm(resid_lw_controls ~ resid_female_controls)
@@ -368,3 +380,211 @@ plot6 <- ggplot(db_clean_filtered, aes(x = age, y = y_salary_m)) +
   scale_linetype_manual(values = c("Male" = "solid", "Female" = "dashed")) +  # Set line types for the legend
   theme_minimal()
 ggsave("views/P6_age_wage_sex_profile.pdf", plot6, width = 8, height = 6) # Save plot 6
+
+
+
+
+# 5. PREDICTING EARNINGS ====================================================
+
+# A) TRAINING-TEST ----------------------------------------------------------
+
+# Create training and testing datasets (70%-30% split)
+inTrain <- createDataPartition(
+  y = db_clean$y_salary_m,  # Target variable for partition
+  p = 0.70,  # Proportion of data for training set
+  list = FALSE  # Return indices as a vector
+)
+
+# Create the training dataset
+training <- db_clean %>%
+  filter(row_number() %in% inTrain)
+
+# Create the testing dataset
+testing <- db_clean %>% 
+  filter(!row_number() %in% inTrain)
+
+# B) MODELS -----------------------------------------------------------------
+
+
+# Model 1: Quadratic Age
+model_1a <- lm(form_1, data = training)
+
+# Out of sample Performance
+predictions <- predict(model_1a, testing)
+score_1a <- RMSE(predictions, testing$log_wage)
+
+
+# Model 2: Sex
+model_2a <- lm(form_2, data = training)
+
+# Out of sample Performance
+predictions <- predict(model_2a, testing)
+score_2a <- RMSE(predictions, testing$log_wage)
+
+
+# Model 3: Conditional Sex
+model_3a <- lm(form_3, data = training)
+
+# Out of sample Performance
+predictions <- predict(model_3a, testing)
+score_3a <- RMSE(predictions, testing$log_wage)
+
+
+# Model 4: Age, age squared, and all variables
+form_4 <- log_wage ~ age + I(age^2) + female + hoursWorkUsual + formal + relab  + maxEducLevel + estrato1 + sizeFirm
+model_4a <- lm(form_4, data = training)
+
+# Out of sample Performance
+predictions <- predict(model_4a, testing)
+score_4a <- RMSE(predictions, testing$log_wage)
+
+
+# Model 5:  Logarithm of hours worked and firm size
+form_5 <- log_wage ~ age + I(age^2) + female + log(hoursWorkUsual) + formal + relab + maxEducLevel + estrato1 + log(sizeFirm)
+model_5a <- lm(form_5, data = training)
+
+# Out of sample Performance
+predictions <- predict(model_5a, testing)
+score_5a <- RMSE(predictions, testing$log_wage)
+
+
+# Model 6: Multiple interactions, no logs
+form_6 <- log_wage ~ age + I(age^2) + female + hoursWorkUsual + formal + relab + maxEducLevel + estrato1 + sizeFirm +
+  female:age + female:hoursWorkUsual + age:maxEducLevel + hoursWorkUsual:relab  
+model_6a <- lm(form_6, data = training)
+
+# Out of sample Performance
+predictions <- predict(model_6a, testing)
+score_6a <- RMSE(predictions, testing$log_wage)
+
+
+# Model 7: Logs and interactions
+form_7 <- log_wage ~ age + I(age^2) + female + log(hoursWorkUsual) + formal + relab + maxEducLevel + estrato1 + log(sizeFirm) +
+  female:age + female:log(hoursWorkUsual) + age:maxEducLevel + log(hoursWorkUsual):relab  
+model_7a <- lm(form_7, data = training)
+
+# Out of sample Performance
+predictions <- predict(model_7a, testing)
+score_7a <- RMSE(predictions, testing$log_wage)
+
+
+# Modelo 8: Complex specification with logs, polynomials, and interactions
+form_8 <- log_wage ~ age + poly(age, 3, raw = TRUE) + female + log(hoursWorkUsual) + formal + relab + maxEducLevel + estrato1 + log(sizeFirm) +
+  poly(age, 3, raw = TRUE):female + poly(age, 3, raw = TRUE):maxEducLevel +  poly(age, 3, raw = TRUE):relab
+model_8a <- lm(form_8, data = training)
+
+# Out of sample Performance
+predictions <- predict(model_8a, testing)
+score_8a <- RMSE(predictions, testing$log_wage)
+
+# Create a data frame to store RMSE scores for all models
+scores_test <- data.frame( Model= c(1, 2, 3, 4, 5, 6, 7, 8),
+    RMSE= c(score_1a, score_2a, score_3a, score_4a, score_5a, score_6a, score_7a, score_8a))
+print(scores_test)
+
+# Export the scores table to LaTeX
+cat("
+\\begin{table}[ht]
+\\centering
+\\begin{tabular}{lc}
+\\hline
+Model & RMSE \\\\
+\\hline
+1 & ", round(score_1a, 4), " \\\\
+2 & ", round(score_2a, 4), " \\\\
+3 & ", round(score_3a, 4), " \\\\
+4 & ", round(score_4a, 4), " \\\\
+5 & ", round(score_5a, 4), " \\\\
+6 & ", round(score_6a, 4), " \\\\
+7 & ", round(score_7a, 4), " \\\\
+8 & ", round(score_8a, 4), " \\\\
+\\hline
+\\end{tabular}
+\\caption{RMSE Scores for Different Models}
+\\label{tab:rmse_scores}
+\\end{table}
+", file = "views/model_rmse_scores.tex")
+
+# Model with smallest RSME: 8
+# Obtain predictions from model 8 on the test set
+predictions_8 <- predict(model_8a, testing)
+
+# Calculate prediction errors (residuals)
+prediction_errors <- testing$log_wage - predictions_8
+
+# Plot 7: Visualize the distribution of prediction errors (histogram)
+plot7 <- ggplot(data = testing, aes(x = prediction_errors)) +
+  geom_histogram(binwidth = 0.1, fill = "blue", color = "black", alpha = 0.7) +
+  labs(x = "Prediction Error", y = "Frequency") +
+  theme_minimal()
+ggsave("views/P7_prediction_errors_hist.pdf", plot7, width = 8, height = 6) # Save plot 6
+
+# plot 8: Boxplot to visualize outliers
+plot8 <- ggplot(data = testing, aes(y = prediction_errors)) +
+  geom_boxplot(fill = "orange", color = "black") +
+  labs(y = "Prediction Error") +
+  theme_minimal()
+ggsave("views/P8_prediction_errors_box.pdf", plot8, width = 8, height = 6) # Save plot 6
+
+
+# C) LOOCV ------------------------------------------------------------------
+# Perform Leave-One-Out Cross Validation (LOOCV) on models 5, 7, and 8
+
+# Define the control method for LOOCV
+ctrl <- trainControl(method = "LOOCV")  # Leave-One-Out Cross Validation
+
+# Model 5 with LOOCV
+model_5b <- train(form_5,  # Formula for model 5
+                  data = db_clean,  # Full dataset
+                  method = 'lm',  # Linear regression
+                  trControl = ctrl)  # LOOCV control
+
+# Calculate RMSE for model 5 using LOOCV predictions
+score_5b <- RMSE(model_5b$pred$pred, db_clean$log_wage)
+
+
+# Model 7 with LOOCV
+model_7b <- train(form_7,  # Formula for model 7
+                  data = db_clean,  # Full dataset
+                  method = 'lm',  # Linear regression
+                  trControl = ctrl)  # LOOCV control
+
+# Calculate RMSE for model 7 using LOOCV predictions
+score_7b <- RMSE(model_7b$pred$pred, db_clean$log_wage)
+
+
+# Model 8 with LOOCV
+model_8b <- train(form_8,  # Formula for model 8
+                  data = db_clean,  # Full dataset
+                  method = 'lm',  # Linear regression
+                  trControl = ctrl)  # LOOCV control
+
+# Calculate RMSE for model 8 using LOOCV predictions
+score_8b <- RMSE(model_8b$pred$pred, db_clean$log_wage)
+
+
+# Create a data frame to compare RMSE for models 5, 7, and 8 (with and without LOOCV)
+scores_test2 <- data.frame(Model = c(5, 7, 8),
+                           RMSE = c(score_5a, score_7a, score_8a),  # RMSE from the test sample
+                           RMSE_LOOCV = c(score_5b, score_7b, score_8b))  # RMSE from LOOCV
+
+# Print the scores table
+print(scores_test2)
+
+# Export the table to LaTeX format
+cat("
+\\begin{table}[ht]
+\\centering
+\\begin{tabular}{lcc}
+\\hline
+Model & RMSE (Test) & RMSE (LOOCV) \\\\
+\\hline
+5 & ", round(score_5a, 4), " & ", round(score_5b, 4), " \\\\
+7 & ", round(score_7a, 4), " & ", round(score_7b, 4), " \\\\
+8 & ", round(score_8a, 4), " & ", round(score_8b, 4), " \\\\
+\\hline
+\\end{tabular}
+\\caption{Comparison of RMSE for Models 5, 7, and 8 (Test vs. LOOCV)}
+\\label{tab:rmse_loocv}
+\\end{table}
+", file = "views/rmse_loocv_comparison.tex")
