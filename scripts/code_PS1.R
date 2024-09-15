@@ -30,7 +30,10 @@ p_load(rio,        # For importing/exporting data
        stargazer,  # For creating tables/output to LaTeX
        boot,       # For bootstrap
        MASS,       # For regression calculations
-       dplyr)      
+       dplyr,
+       caret,
+       ggplot2,    # For plotting
+       gridExtra)  # For arranging multiple plots    
 
 
 
@@ -62,7 +65,61 @@ db_clean <- db_clean %>%
 
 # 2. DESCRIPTIVE STATISTICS ==================================================
 
-# Complete
+# Generate descriptive statistics table in LaTeX format
+stargazer(as.data.frame(db_clean), 
+          type = "latex",               
+          title = "Descriptive Statistics for Key Variables",  
+          out = "views/descriptive_stats.tex",  # Export to LaTeX
+          summary.stat = c("mean", "sd", "min", "max", "n"))
+
+# Scatter plot of scaled salary against age, colored by sex
+plot1 <- db_clean %>%
+  filter(y_salary_m < 1e07) %>%
+  mutate(
+    sex = recode(sex, `1` = "Male", `0` = "Female")  # Recode sex for better labeling
+  ) %>%
+  ggplot(mapping = aes(x = age, y = y_salary_m_scale)) +
+  geom_point(aes(color = factor(sex))) +  # Scatter plot with color by sex
+  geom_smooth(method = "lm") +  # Add linear regression line
+  labs(
+    x = "Age", 
+    y = "Monthly Salary", 
+    color = "Sex"  # Label the color legend
+  ) +
+  theme_minimal()
+ggsave("views/P01_salary_age_sex.png", plot1, width = 8, height = 6)  # Save the scatter plot
+
+# Bar chart comparing average work hours between males and females
+plot2 <- db_clean %>%
+  group_by(sex) %>%
+  summarise(mean_hours = mean(hoursWorkUsual, na.rm = TRUE)) %>%
+  mutate(sex = recode(sex, `1` = "Male", `0` = "Female")) %>%  # Recode sex
+  ggplot(aes(x = sex, y = mean_hours, fill = sex)) +  
+  geom_bar(stat = "identity", width = 0.5) +  # Bar plot with specified width
+  labs(x = "Sex", y = "Average Work Hours", color = "Sex") +
+  theme_minimal()
+ggsave("views/P02_work_hours_sex.png", plot2, width = 8, height = 6)  # Save the bar chart
+
+# Histogram for work hours, socioeconomic stratum, and salary
+a <- ggplot(db_clean, aes(x = hoursWorkUsual)) +
+  geom_histogram(bins = 50, fill = "darkblue") +
+  labs(x = "Work Hours", y = "Number of Observations") +
+  theme_bw()
+
+b <- ggplot(db_clean, aes(x = estrato1)) +
+  geom_histogram(bins = 4, fill = "darkblue") +
+  labs(x = "Socioeconomic Stratum", y = "Number of Observations") +
+  theme_bw()
+
+# Using the scaled salary instead of transforming the variable
+c <- ggplot(db_clean, aes(x = y_salary_m_scale)) +
+  geom_histogram(bins = 50, fill = "darkblue") +
+  labs(x = "Monthly Salary", y = "Number of Observations") +
+  theme_bw()
+
+# Combine histograms into a single plot without a main title
+combined_plot <- grid.arrange(a, b, c, ncol = 3)
+ggsave("views/P03_histograms_combined.png", combined_plot, width = 12, height = 6)  # Save the combined histograms
 
 
 
@@ -185,7 +242,6 @@ plot3 <- ggplot() +
   labs(x = "Age", y = "Predicted Wage") +  # Add explanation to the plot
   theme_minimal()
 ggsave("views/P3_age_wage_profile2.pdf", plot3, width = 8, height = 6) # Save plot 3
-
 
 
 
