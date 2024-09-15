@@ -48,11 +48,11 @@ db_clean <- db %>%
          !is.na(age),            # Remove missing values in age
          y_salary_m > 0,         # Include only positive salaries
          !is.na(y_salary_m)) %>% # Remove missing values in salary
-  mutate(log_wage = log(y_salary_m)) # Create a new column with the log of wages
+  mutate(log_wage = log(y_salary_m)) %>% #  # Create a new column with the log of wages
+  mutate(y_salary_m_scale = y_salary_m/2e06) # Create a new column with wage in scale
 
 # Variables to keep
-db_clean <- db_clean[, c("y_salary_m", "age", "sex", "hoursWorkUsual", "formal", "relab", "maxEducLevel", "estrato1", "sizeFirm", "log_wage")]
-
+db_clean <- db_clean[, c("y_salary_m", "age", "sex", "hoursWorkUsual", "formal", "relab", "maxEducLevel", "estrato1", "sizeFirm", "log_wage", "y_salary_m_scale")]
 
 # Missings
 colSums(is.na(db_clean[, c("log_wage", "age", "sex", "hoursWorkUsual", "formal", "relab", "maxEducLevel", "estrato1", "sizeFirm")]))
@@ -134,16 +134,24 @@ stargazer(model_1, type = "latex",
 # Generate a sequence of ages for predicting wage values
 age_seq <- data.frame(age = seq(min(db_clean$age), max(db_clean$age), by = 1))
 
-# Predict log wage based on the age sequence
-age_seq$predicted_log_wage <- predict(model_1, newdata = age_seq)
+# Predict log wage with confidence intervals
+predictions <- predict(model_1, newdata = age_seq, interval = "confidence")
 
-# Convert predicted log wage back to regular wage
-age_seq$predicted_wage <- exp(age_seq$predicted_log_wage)
+# Add predicted log wage and confidence intervals to the dataframe
+age_seq$predicted_log_wage <- predictions[, "fit"]
+age_seq$lower_ci <- predictions[, "lwr"]
+age_seq$upper_ci <- predictions[, "upr"]
+
+# Convert predicted log wage back to regular wage in scale
+age_seq$predicted_wage <- exp(age_seq$predicted_log_wage)/1e06
+age_seq$lower_ci2 <- exp(age_seq$lower_ci)/1e06
+age_seq$upper_ci2 <- exp(age_seq$upper_ci)/1e06
 
 # Plot 1: Age-Log Wage Profile with Peak Age and Confidence Intervals
-plot1 <- ggplot(db_clean, aes(x = age, y = log_wage)) +
-  geom_point(alpha = 0.1, color = "blue") +  # Plot individual observations
+plot1 <- ggplot() + 
+  geom_point(data = db_clean, aes(x = age, y = log_wage), alpha = 0.1, color = "blue") +  # Plot individual observations
   geom_line(data = age_seq, aes(x = age, y = predicted_log_wage), color = "red") +  # Predicted log wage curve
+  geom_ribbon(data = age_seq, aes(x = age, ymin = lower_ci, ymax = upper_ci), alpha = 0.4, fill = "grey") +  # Confidence interval as a shaded region
   geom_vline(xintercept = peak_age, color = "green") +  # Peak age vertical line
   geom_vline(xintercept = ci_peak_age[1], color = "black", linetype = "dashed") +  # Lower bound of confidence interval
   geom_vline(xintercept = ci_peak_age[2], color = "black", linetype = "dashed") +  # Upper bound of confidence interval
@@ -154,11 +162,13 @@ ggsave("views/P1_age_log_wage_profile.pdf", plot1, width = 8, height = 6) # Save
 
 # Filter data to include only wages less than 2 million for better visualization
 db_clean_filtered <- db_clean %>% 
-  filter(y_salary_m < 2e06)
+  filter(y_salary_m_scale < 2)
 
 # Plot 2: Age-Wage Profile with Observations, Peak Age, and Confidence Intervals
-plot2 <- ggplot(db_clean_filtered, aes(x = age, y = y_salary_m)) +
+plot2 <- ggplot() + 
+  geom_point(data = db_clean_filtered, aes(x = age, y = y_salary_m_scale), alpha = 0.1, color = "blue") +  # Plot individual observations
   geom_point(alpha = 0.1, color = "blue") +  # Plot individual observations
+  geom_ribbon(data = age_seq, aes(x = age, ymin = lower_ci2, ymax = upper_ci2), alpha = 0.4, fill = "grey") +  # Confidence interval as a shaded region
   geom_line(data = age_seq, aes(x = age, y = predicted_wage), color = "red") +  # Predicted wage curve
   geom_vline(xintercept = peak_age, color = "green") +  # Peak age vertical line
   geom_vline(xintercept = ci_peak_age[1], color = "black", linetype = "dashed") +  # Lower bound of confidence interval
@@ -169,12 +179,13 @@ plot2 <- ggplot(db_clean_filtered, aes(x = age, y = y_salary_m)) +
 ggsave("views/P2_age_wage_profile.pdf", plot2, width = 8, height = 6) # Save plot 2
 
 # Plot 3: Predicted Wage Profile by Age
-plot3 <- ggplot(age_seq, aes(x = age, y = predicted_wage)) +
-  geom_line(color = "blue", size = 1) +  # Plot predicted wage curve
-  labs(x = "Age", y = "Predicted Wage", 
-       caption = "Green line: Peak Age\nDashed lines: 95% Confidence Interval (Bootstrap)") +  # Add explanation to the plot
+plot3 <- ggplot() + 
+  geom_line(data = age_seq, aes(x = age, y = predicted_wage), color = "blue", size = 1) +  # Predicted wage curve
+  geom_ribbon(data = age_seq, aes(x = age, ymin = lower_ci2, ymax = upper_ci2), alpha = 0.4, fill = "grey") +  # Confidence interval as a shaded region
+  labs(x = "Age", y = "Predicted Wage") +  # Add explanation to the plot
   theme_minimal()
 ggsave("views/P3_age_wage_profile2.pdf", plot3, width = 8, height = 6) # Save plot 3
+
 
 
 
@@ -191,20 +202,12 @@ form_2 <- log_wage ~ female
 model_2 <- lm(form_2, data = db_clean) # Fit the linear model
 summary(model_2) # Display the model summary
 
-# Export to LaTeX
-stargazer(model_2, type = "latex",
-          omit.stat = c("f", "adj.rsq", "ser"), # Only include observations and R-squared
-          title = "Regression Results: Log Wage as a Function of Gender",
-          dep.var.labels = "Log Wage",
-          covariate.labels = c("Female (1 = Female)"), # Label the coefficients
-          digits = 3,
-          out = "views/reg_model2.tex") # Save to LaTeX file
-
 
 # B) CONDITIONAL MODEL ------------------------------------------------------
 
 # Model 
 form_3 <- log_wage ~ female + relab + hoursWorkUsual + formal + sizeFirm
+model_3 <- lm(form_3, data = db_clean)
 
 # i) FWL
 # Regress log wage on the control variables
@@ -243,6 +246,17 @@ bootstrap_results <- boot(db_clean, boot_fwl_fn, R = 1000)
 # Calculate standard errors from bootstrap
 bootstrap_se <- apply(bootstrap_results$t, 2, sd)
 
+# Prepare stargazer for LaTeX export
+stargazer(model_2, model_3, fwl_model, 
+          type = "text", 
+          se = list(NULL, NULL, c(fwl_se, bootstrap_se)),  # Add SE for FWL with bootstrap
+          title = "Gender Wage Gap: Simple, Conditional, and FWL Models", 
+          dep.var.labels = "Log Wage",
+          covariate.labels = c("Female"),  # Only show 'Female'
+          omit = c("relab", "hoursWorkUsual", "formal", "sizeFirm"),  # Omit control variables
+          omit.stat = c("f", "ser", "adj.rsq"),  # Omit F-statistic and standard error of the regression
+          out = "views/gender_wage_gap_models.tex")
+
 # Create the LaTeX table manually using cat() for custom formatting
 cat("
 \\begin{table}[ht]
@@ -260,7 +274,6 @@ Standard Error (Bootstrap) & ", round(bootstrap_se, 5), " \\\\
 \\label{tab:fwl_comparison}
 \\end{table}
 ", file = "views/fwl_se_comparison.tex")
-
 
 # C) PLOT -------------------------------------------------------------------
 
@@ -320,12 +333,24 @@ age_seq_male <- data.frame(age = seq(min(db_clean_male$age), max(db_clean_male$a
 age_seq_female <- data.frame(age = seq(min(db_clean_female$age), max(db_clean_female$age), by = 1))
 
 # Predict log wage for males and females
-age_seq_male$predicted_log_wage <- predict(model_male, newdata = age_seq_male)
-age_seq_female$predicted_log_wage <- predict(model_female, newdata = age_seq_female)
+predicted_male <- predict(model_male, newdata = age_seq_male, interval = "confidence")
+predicted_female <- predict(model_female, newdata = age_seq_female, interval = "confidence")
 
-# Convert predicted log wage back to regular wage for males and females
-age_seq_male$predicted_wage <- exp(age_seq_male$predicted_log_wage)
-age_seq_female$predicted_wage <- exp(age_seq_female$predicted_log_wage)
+# Add predicted log wage and confidence intervals to the dataframe
+age_seq_male$predicted_log_wage <- predicted_male[, "fit"]
+age_seq_male$lower_ci <- predicted_male[, "lwr"]
+age_seq_male$upper_ci <- predicted_male[, "upr"]
+age_seq_female$predicted_log_wage <- predicted_female[, "fit"]
+age_seq_female$lower_ci <- predicted_female[, "lwr"]
+age_seq_female$upper_ci <- predicted_female[, "upr"]
+
+# Convert predicted log wage back to regular wage in scale
+age_seq_male$predicted_wage <- exp(age_seq_male$predicted_log_wage)/1e06
+age_seq_male$lower_ci2 <- exp(age_seq_male$lower_ci)/1e06
+age_seq_male$upper_ci2 <- exp(age_seq_male$upper_ci)/1e06
+age_seq_female$predicted_wage <- exp(age_seq_female$predicted_log_wage)/1e06
+age_seq_female$lower_ci2 <- exp(age_seq_female$lower_ci)/1e06
+age_seq_female$upper_ci2 <- exp(age_seq_female$upper_ci)/1e06
 
 # Create a combined data frame for males and females with a gender identifier
 db_clean_combined <- db_clean %>%
@@ -337,9 +362,10 @@ age_seq_female$gender <- "Female"
 age_seq_combined <- bind_rows(age_seq_male, age_seq_female)
 
 # Plot 4: Age-Log Wage Profile by sex
-plot4 <- ggplot(db_clean_combined, aes(x = age, y = log_wage, color = gender, shape = gender)) +
-  geom_point(alpha = 0.5, size = 0.5) +  # Plot individual observations with different shapes by gender
+plot4 <-ggplot() + 
+  geom_point(data = db_clean_combined, aes(x = age, y = log_wage, color = gender, shape = gender), alpha = 0.5, size = 0.5) +  # Plot individual observations
   geom_line(data = age_seq_combined, aes(x = age, y = predicted_log_wage, color = gender), size = 1) +  # Predicted log wage curve
+  geom_ribbon(data = age_seq_combined, aes(x = age, ymin = lower_ci, ymax = upper_ci, color = gender), alpha = 0.4, fill = "grey") +  # Confidence interval as a shaded region
   geom_vline(xintercept = peak_age_male, color = "blue", linetype = "solid") +  # Peak age for males
   geom_vline(xintercept = ci_peak_age_male[1], color = "blue", linetype = "dashed") +  # Lower bound of CI for males
   geom_vline(xintercept = ci_peak_age_male[2], color = "blue", linetype = "dashed") +  # Upper bound of CI for males
@@ -353,11 +379,13 @@ ggsave("views/P4_age_logw_sex_profile.pdf", plot4, width = 8, height = 6) # Save
 
 # Filter data to include only wages less than 2 million for better visualization
 db_clean_combined_filtered <- db_clean_combined %>% 
-  filter(y_salary_m < 2e06)
+  filter(y_salary_m_scale < 2)
 
 # Plot 5: Age-Wage Profile by sex
-plot5 <-ggplot(db_clean_combined_filtered, aes(x = age, y = y_salary_m, color = gender, shape = gender)) +
-  geom_point(alpha = 0.5, size = 0.5) +  # Plot individual observations with different shapes by gender
+plot5 <- ggplot() + 
+  geom_point(data = db_clean_combined_filtered, aes(x = age, y = y_salary_m_scale, color = gender, shape = gender), alpha = 0.5, size = 0.5) +  # Plot individual observations
+  geom_line(data = age_seq_combined, aes(x = age, y = predicted_wage, color = gender), size = 1) +  # Predicted log wage curve
+  geom_ribbon(data = age_seq_combined, aes(x = age, ymin = lower_ci2, ymax = upper_ci2, color = gender), alpha = 0.4, fill = "grey") +  # Confidence interval as a shaded region
   geom_line(data = age_seq_combined, aes(x = age, y = predicted_wage, color = gender), size = 1) +  # Predicted wage curve
   geom_vline(xintercept = peak_age_male, color = "blue", linetype = "solid") +  # Peak age for males
   geom_vline(xintercept = ci_peak_age_male[1], color = "blue", linetype = "dashed") +  # Lower bound of CI for males
@@ -372,15 +400,15 @@ plot5 <-ggplot(db_clean_combined_filtered, aes(x = age, y = y_salary_m, color = 
 ggsave("views/P5_age_wage_sex_profile.pdf", plot5, width = 8, height = 6) # Save plot 5
 
 # Plot 6: Combined Age-Wage Profile for Males and Females
-plot6 <- ggplot(db_clean_filtered, aes(x = age, y = y_salary_m)) +
-  geom_line(data = age_seq_male, aes(x = age, y = predicted_wage, color = "Male", linetype = "Male"), size = 1) +  # Males
-  geom_line(data = age_seq_female, aes(x = age, y = predicted_wage, color = "Female", linetype = "Female"), size = 1) +  # Females
-  labs(x = "Age", y = "Predicted Wage", color = "Sex", linetype = "Sex") +  # Add labels for the legend
+plot6 <- ggplot() +
+  geom_line(data = age_seq_male, aes(x = age, y = predicted_wage, color = "Male"), size = 1) +  # Males
+  geom_line(data = age_seq_female, aes(x = age, y = predicted_wage, color = "Female"), size = 1) +  # Females
+  geom_ribbon(data = age_seq_combined, aes(x = age, ymin = lower_ci2, ymax = upper_ci2, color = gender), alpha = 0.4, fill = "grey") +  # Confidence interval as a shaded region
+  labs(x = "Age", y = "Predicted Wage", color = "Sex") +  # Add labels for the legend
   scale_color_manual(values = c("Male" = "blue", "Female" = "red")) +  # Set colors for the legend
   scale_linetype_manual(values = c("Male" = "solid", "Female" = "dashed")) +  # Set line types for the legend
   theme_minimal()
 ggsave("views/P6_age_wage_sex_profile.pdf", plot6, width = 8, height = 6) # Save plot 6
-
 
 
 
