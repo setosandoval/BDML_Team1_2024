@@ -1,20 +1,22 @@
+Here’s an improved version of the README:
+
 # Repository: Problem Sets Team 1 - Big Data and Machine Learning
 
-This is the repository with the solution to the Problem Sets for Big Data and Machine Learning in 2024-20. The authors are Group 4, consisting of:
+This repository contains the solutions for the Problem Sets in the Big Data and Machine Learning course (2024-20). The project was developed by Team 1, composed of:
 - Sergio Sandoval
 - María Fernanda Blanco
 - Juan Fernando Barberi
 - Gutierrez
 
-## Structure
+## Repository Structure
 
-The repository contains 3 folders, each one holding content related to a specific problem set.
+The repository is organized into three folders, each corresponding to a specific problem set.
 
-In each folder, you can find:
+Within each folder, you will find:
 
-- `document`: contains the final document in `pdf` format.
-- `scripts`: contains all the R `code` files for solving the problem set.
-- `stores`: contains all the `databases`.
-- `views`: contains all the figures and tables.
+- `document`: the final report in `pdf` format.
+- `scripts`: all the R `code` used to solve the problem set.
+- `stores`: the `datasets` used for analysis.
+- `views`: all generated figures and tables.
 
-Additionally, each folder has its own `README` with the necessary information for each problem set.
+Each folder also includes its own `README`, providing detailed information about the respective problem set.
