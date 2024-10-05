@@ -1,12 +1,10 @@
-# Problem Set 1 Repository for Big Data and Machine Learning for Applied Economics
+# Problem Set 1 - BDML Team 1
 
-This repository is designed as a template for problem sets in Big Data and Machine Learning for Applied Economics. The repository follows an organized structure, which facilitates both document writing and code development.
+## Structure
 
-## Repository Structure
+You can find four main folders, each serving a specific purpose:
 
-The repository contains four main folders, each serving a specific purpose:
-
-- `document/`: This folder contains the final output document of the problem set in `pdf` format, which includes the full solution. The document is written in LaTeX, with figures and tables ideally pulled directly from the `views` folder. 
+- `document/`: This folder contains the final output document of the problem set in `pdf` format, which includes the full solution. 
   
 - `scripts/`: This folder contains all the scripts used in the problem set. It includes:
   - `scrape_PS1.R`: The script for scraping the dataset from the web.
@@ -25,4 +23,3 @@ The repository contains four main folders, each serving a specific purpose:
 
 3. Once the data is obtained, run the `code_PS1.R` script to execute the various models and analyses discussed in the problem set. The script generates figures and tables, which are automatically saved in the `views/` folder.
 
-4. Compile the LaTeX document in the `document/` folder to generate the final report. Ensure all figures and tables are correctly referenced and included in the document.
