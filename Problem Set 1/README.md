@@ -13,7 +13,7 @@ You can find four main folders, each serving a specific purpose:
 - `stores/`: This folder stores all the datasets used for the problem set. 
   - `data_PS1.rds`: The main dataset obtained through web scraping and used for the analysis.
   
-- `views/`: This folder contains all the figures and tables generated from the analysis. These elements are linked directly to the LaTeX document to ensure the figures are up-to-date with the analysis.
+- `views/`: This folder contains all the figures and tables generated from the analysis.
 
 ## How to Run the Project
 

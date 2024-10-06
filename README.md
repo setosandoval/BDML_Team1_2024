@@ -1,5 +1,3 @@
-Here’s an improved version of the README:
-
 # Repository: Problem Sets Team 1 - Big Data and Machine Learning
 
 This repository contains the solutions for the Problem Sets in the Big Data and Machine Learning course (2024-20). The project was developed by Team 1, composed of:
