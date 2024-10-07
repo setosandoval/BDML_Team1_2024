@@ -4,7 +4,7 @@ This repository contains the solutions for the Problem Sets in the Big Data and 
 - Sergio Sandoval
 - María Fernanda Blanco
 - Juan Fernando Barberi
-- Gutierrez
+- Juan Eduardo Gutiérrez
 
 ## Repository Structure
 
