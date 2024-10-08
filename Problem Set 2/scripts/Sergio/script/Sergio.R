@@ -9,7 +9,7 @@
 rm(list = ls())
 
 # Set working directory
-setwd("/Users/setosandoval/Desktop/BDML/Problem Sets/BDML_Team1_PS1/Problem Set 2")
+setwd("/Users/sergiosandovalcamargo/Documents/BDML/Repositorio P. Sets/BDML_Team1_2024/Problem Set 2")
 
 # Libraries
 library(pacman)
