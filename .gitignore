@@ -279,3 +279,7 @@ rsconnect/
 
 
 # End of https://www.toptal.com/developers/gitignore/api/r,macos,python,microsoftoffice
+Problem Set 2/stores/data/raw/train_personas.csv
+Problem Set 2/stores/data/raw/test_hogares.csv
+Problem Set 2/stores/data/raw/train_hogares.csv
+Problem Set 2/stores/data/raw/test_personas.csv
