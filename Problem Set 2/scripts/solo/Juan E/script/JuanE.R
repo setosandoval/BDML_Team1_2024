@@ -2,7 +2,7 @@
 rm(list = ls())
 
 # Set working directory
-setwd("~/Desktop/Big Data/PS2")
+setwd("~/Desktop/Repositiorios/BDML_Team1_2024/Problem Set 2")
 
 # Libraries
 library(pacman)
@@ -53,11 +53,70 @@ train_hogares <- train_hogares %>%
   left_join(info_personas, by = "id") %>%
   mutate(max_educ = factor(max_educ, levels = c(1:6), labels = c('None', 'Preschool', 'Primary', 'Secondary', 'High School', 'University')))
 
-# Separamos la variable dependiente
-y_train <- train_hogares$poor
-X_train <- train_hogares %>% select(-poor, -id)
 
-# Eliminar filas con valores faltantes
-complete_cases <- complete.cases(X_train)
-X_train_clean <- X_train[complete_cases, ]
-y_train_clean <- y_train[complete_cases]
+# Limpieza y transformación de los datos
+test_hogares <- test_hogares %>%
+  mutate(urban = ifelse(Clase == 1, 1, 0),
+         urban = factor(urban, levels = c(0, 1), labels = c("Rural", "Urban")),
+         room_p = ifelse(P5010 > 0, Nper / P5010, NA),
+         kind = case_when(
+           P5090 %in% c(1, 2) ~ 1, 
+           P5090 %in% c(3, 4) ~ 2,
+           P5090 %in% c(5, 6) ~ 3
+         ),
+         kind = factor(kind, levels = c(1, 2, 3), labels = c("Owned", "Rented", "No Property"))
+  ) %>%
+  rename(num_per = Nper, num_per_u = Npersug, lp = Lp, fex_c = Fex_c) %>%
+  select(id, urban, room_p, kind, num_per, num_per_u, lp, fex_c)
+
+# Agrupación por hogar en base a train_personas
+info_personas2 <- test_personas %>%
+  group_by(id) %>%
+  summarise(num_female = sum(as.numeric(P6020 == 2)),
+            max_educ = max(as.numeric(P6210)),
+            num_unemp = sum(as.numeric(Oc == 0))) %>%
+  select(id, num_female, max_educ, num_unemp)
+
+# Unir las bases de datos
+test_hogares <- test_hogares %>%
+  left_join(info_personas2, by = "id") %>%
+  mutate(max_educ = factor(max_educ, levels = c(1:6), labels = c('None', 'Preschool', 'Primary', 'Secondary', 'High School', 'University')))
+
+rm(info_personas, info_personas2, train_personas, test_personas)
+
+
+
+####### MODELOS
+
+
+
+
+# Definir control de entrenamiento con validación cruzada de 10 folds
+train_control <- trainControl(method = "cv", number = 10)
+
+# Ajustar modelo con pesos de clase para equilibrar las clases
+tree_model <- 
+
+  
+#### EXPORTAR
+predictSample <- test_hogares   %>% 
+  mutate(pobre = predict(tree_model, newdata = test, type = "raw")    ## predicted class labels
+  )  %>% select(id,pobre)
+
+predictSample<- predictSample %>% 
+  mutate(pobre=ifelse(pobre=="Yes",1,0)) %>% 
+  select(id,pobre)
+
+head(predictSample)
+
+name<- paste0("scripts/solo/Juan E/submissions/NOMBREcsv") 
+write.csv(predictSample,name, row.names = FALSE)
+
+
+
+
+
+
+
+
+
