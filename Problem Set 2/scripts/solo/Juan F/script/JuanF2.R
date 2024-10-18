@@ -45,6 +45,27 @@ print(model3)
 
 
 
+# Kaggle modelo 3:
+
+predictSample <- test   %>% 
+  mutate(pobre_lab = predict(model1, newdata = test, type = "raw")    ## predicted class labels
+  )  %>% select(id,pobre_lab)
+
+head(predictSample)
+
+
+predictSample<- predictSample %>% 
+  mutate(pobre=ifelse(pobre_lab=="Yes",1,0)) %>% 
+  select(id,pobre)
+head(predictSample)  
+
+name<- paste0("scripts/solo/Juan F/submisison/","RF_SMOTE_mtry", "15", ".csv") 
+
+write.csv(predictSample,name, row.names = FALSE)
+
+
+
+
 
 
 
