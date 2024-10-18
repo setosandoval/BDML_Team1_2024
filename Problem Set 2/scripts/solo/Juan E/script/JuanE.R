@@ -152,3 +152,45 @@ head(predictSample)
 name<- paste0("scripts/solo/Juan E/submissions/","EN_lambda_", "", "_alpha_" , "", ".csv") 
 
 write.csv(predictSample,name, row.names = FALSE)
+
+
+#MODELO 2
+# Configuración del control del modelo con validación cruzada y SMOTE
+ctrl <- trainControl(method = "cv",
+                     number = 5,
+                     classProbs = TRUE,  # Necesario para obtener las probabilidades
+                     summaryFunction = prSummary,  # Usa precision, recall y F1-score
+                     savePredictions = TRUE,
+                     sampling = "smote")  # Aplicar SMOTE para balancear las clases
+
+# Entrenar el modelo logit con SMOTE
+set.seed(123)
+
+model2 <- train(Pobre ~ .,  # Usar la variable Pobre como objetivo
+                data = train_hogares,  # Conjunto de datos de entrenamiento
+                method = "glm",  # Regresión logística
+                family = "binomial",  # Especificar la familia binomial
+                metric = "F",  # F1-score como métrica
+                trControl = ctrl)
+
+# Mostrar los resultados del modelo
+model2
+
+
+predictSample <- test_hogares   %>% 
+  mutate(Pobre = predict(model1, newdata = test_hogares, type = "raw")    ## predicted class labels
+  )  %>% select(id,Pobre)
+
+head(predictSample)
+
+
+predictSample<- predictSample %>% 
+  mutate(Pobre=ifelse(Pobre=="Yes",1,0)) %>% 
+  select(id,Pobre)
+head(predictSample)  
+
+name<- paste0("scripts/solo/Juan E/submissions/","LO_lambda_", "", "_alpha_" , "", ".csv") 
+
+write.csv(predictSample,name, row.names = FALSE)
+
+
