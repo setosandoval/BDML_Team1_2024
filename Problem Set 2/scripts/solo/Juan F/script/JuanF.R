@@ -10,7 +10,7 @@
 rm(list = ls())
 
 # Set working directory
-setwd("C:/Users/User/Documents/RepBDML2/BDML_Team1_2024")
+setwd("C:/Users/User/Documents/RepBDML2/BDML_Team1_2024/Problem Set 2")
 
 # Libraries
 library(pacman)
@@ -490,7 +490,7 @@ predictSample<- predictSample %>%
   select(id,pobre)
 head(predictSample)  
 
-name<- paste0("EN_lambda_", "0001", "_alpha_" , "025", ".csv") 
+name<- paste0("scripts/solo/Juan F/submisison/","EN_lambda_", "0001", "_alpha_" , "025", ".csv") 
 
 write.csv(predictSample,name, row.names = FALSE)
 
@@ -537,9 +537,10 @@ predictSample<- predictSample %>%
   select(id,pobre)
 head(predictSample)  
 
-name<- paste0("LO_lambda_", "0001", "_alpha_" , "025", ".csv") 
+name<- paste0("scripts/solo/Juan F/submisison/","LO_lambda_", "0001", "_alpha_" , "025", ".csv") 
 
 write.csv(predictSample,name, row.names = FALSE)
+
 
 
 
@@ -573,6 +574,8 @@ model3 <- train(Pobre ~ .,                # Variable objetivo y variables predic
 # Mostrar los resultados del modelo
 model3
 
+
+
 #Kaggle modelo 3:
 
 predictSample <- test   %>% 
@@ -587,6 +590,33 @@ predictSample<- predictSample %>%
   select(id,pobre)
 head(predictSample)  
 
-name<- paste0("RF_", "6_", "mtry", ".csv") 
+name<- paste0("scripts/solo/Juan F/submisison/","RF_", "6_", "mtry", ".csv") 
 
 write.csv(predictSample,name, row.names = FALSE)
+
+
+
+
+
+# Cargar la librería necesaria
+library(caret)
+
+# Configuración del control del modelo con validación cruzada y F1-score
+ctrl <- trainControl(method = "cv",
+                     number = 5,
+                     classProbs = TRUE,  # Para obtener las probabilidades de clase
+                     summaryFunction = prSummary,  # Usar prSummary para obtener Precision, Recall y F1
+                     savePredictions = TRUE)
+
+# Ajustar el modelo CART con F1-score
+set.seed(098063)
+
+model4 <- train(Pobre ~ .,                
+                data = train,             # Conjunto de datos de entrenamiento
+                method = "rpart",         # Usar CART (árboles de decisión)
+                metric = "F",            # Usar F1 como métrica de evaluación
+                trControl = ctrl,         # Control del modelo (validación cruzada)
+                tuneLength = 10)          # Ajustar el número de hiperparámetros a explorar
+
+
+model4
