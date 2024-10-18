@@ -1,12 +1,12 @@
 # Clean environment
+gc()
 rm(list = ls())
-
 # Set working directory
 setwd("~/Desktop/Repositiorios/BDML_Team1_2024/Problem Set 2")
 
 # Libraries
 library(pacman)
-p_load(tidyverse, glmnet, caret, rpart, rpart.plot, ranger, Metrics)
+p_load(tidyverse, glmnet, caret, rpart, rpart.plot, ranger, Metrics, DMwR, MLmetrics)
 
 # Data
 train_hogares <- read.csv("stores/data/raw/train_hogares.csv")
@@ -26,27 +26,36 @@ train_personas <- train_personas[, common_personas]
 
 # Limpieza y transformación de los datos
 train_hogares <- train_hogares %>%
-  mutate(poor = factor(Pobre, levels = c(0, 1), labels = c("No", "Yes")),
-         urban = ifelse(Clase == 1, 1, 0),
-         urban = factor(urban, levels = c(0, 1), labels = c("Rural", "Urban")),
-         room_p = ifelse(P5010 > 0, Nper / P5010, NA),
-         kind = case_when(
-           P5090 %in% c(1, 2) ~ 1, 
-           P5090 %in% c(3, 4) ~ 2,
-           P5090 %in% c(5, 6) ~ 3
-         ),
-         kind = factor(kind, levels = c(1, 2, 3), labels = c("Owned", "Rented", "No Property"))
+  mutate(
+    urban = ifelse(Clase == 1, 1, 0),
+    urban = factor(urban, levels = c(0, 1), labels = c("Rural", "Urban")),
+    room_p = ifelse(P5010 > 0, Nper / P5010, NA),
+    rent = ifelse(!is.na(P5130),P5130,P5140),
+    kind = case_when(
+      P5090 %in% c(1, 2) ~ 1, 
+      P5090 %in% c(3, 4) ~ 2,
+      P5090 %in% c(5, 6) ~ 3
+    ),
+    kind = factor(kind, levels = c(1, 2, 3), labels = c("Owned", "Rented", "No Property"))
   ) %>%
   rename(num_per = Nper, num_per_u = Npersug, lp = Lp, fex_c = Fex_c) %>%
-  select(id, poor, urban, room_p, kind, num_per, num_per_u, lp, fex_c)
+  select(Pobre, id, urban, room_p, num_per, lp, rent)
 
-# Agrupación por hogar en base a train_personas
+train_hogares <- subset(train_hogares,rent >1000)
+
+# MODIFICACION DE VARIABLES
+
+train_personas$P6090[is.na(train_personas$P6090)] <- 0
+test_personas$P6090[is.na(test_personas$P6090)] <- 0
+
+# Agrupación por hogar con base en train_personas
 info_personas <- train_personas %>%
   group_by(id) %>%
   summarise(num_female = sum(as.numeric(P6020 == 2)),
             max_educ = max(as.numeric(P6210)),
-            num_unemp = sum(as.numeric(Oc == 0))) %>%
-  select(id, num_female, max_educ, num_unemp)
+            salud = mean(as.numeric(P6090)),
+            num_emp = sum(as.numeric(P6240 == 1))) %>%
+  select(id, num_female, max_educ, num_emp)
 
 # Unir las bases de datos
 train_hogares <- train_hogares %>%
@@ -55,10 +64,12 @@ train_hogares <- train_hogares %>%
 
 
 # Limpieza y transformación de los datos
+
 test_hogares <- test_hogares %>%
   mutate(urban = ifelse(Clase == 1, 1, 0),
          urban = factor(urban, levels = c(0, 1), labels = c("Rural", "Urban")),
          room_p = ifelse(P5010 > 0, Nper / P5010, NA),
+         rent = ifelse(!is.na(P5130),P5130,P5140),
          kind = case_when(
            P5090 %in% c(1, 2) ~ 1, 
            P5090 %in% c(3, 4) ~ 2,
@@ -67,15 +78,18 @@ test_hogares <- test_hogares %>%
          kind = factor(kind, levels = c(1, 2, 3), labels = c("Owned", "Rented", "No Property"))
   ) %>%
   rename(num_per = Nper, num_per_u = Npersug, lp = Lp, fex_c = Fex_c) %>%
-  select(id, urban, room_p, kind, num_per, num_per_u, lp, fex_c)
+  select(id, urban, room_p, num_per, lp, rent)
 
-# Agrupación por hogar en base a train_personas
+test_hogares <- subset(test_hogares,rent >1000)
+
+# Agrupación por hogar con base en train_personas
 info_personas2 <- test_personas %>%
   group_by(id) %>%
   summarise(num_female = sum(as.numeric(P6020 == 2)),
             max_educ = max(as.numeric(P6210)),
-            num_unemp = sum(as.numeric(Oc == 0))) %>%
-  select(id, num_female, max_educ, num_unemp)
+            salud = mean(as.numeric(P6090)),
+            num_emp = sum(as.numeric(P6240 == 1))) %>%
+  select(id, num_female, max_educ, num_emp)
 
 # Unir las bases de datos
 test_hogares <- test_hogares %>%
@@ -84,39 +98,144 @@ test_hogares <- test_hogares %>%
 
 rm(info_personas, info_personas2, train_personas, test_personas)
 
+train_hogares$num_emp[is.na(train_hogares$num_emp)] <- 0
+test_hogares$num_emp[is.na(test_hogares$num_emp)] <- 0
 
+sapply(train_hogares, class)
+train_hogares <- train_hogares %>%
+  select(-id) %>%
+  mutate(Pobre = factor(Pobre,levels=c(0,1), labels=c("No","Yes")))
 
+train_hogares <- na.omit(train_hogares)
+test_hogares <- na.omit(test_hogares)
 ####### MODELOS
 
 
 
+# Configuración del control del modelo con validación cruzada y F1-score
+ctrl <- trainControl(method = "cv",
+                     number = 5,
+                     classProbs = TRUE,  # Necesario para obtener las probabilidades
+                     summaryFunction = prSummary,  # Utilizar prSummary para precisión, recall y F1
+                     savePredictions = TRUE)
 
-# Definir control de entrenamiento con validación cruzada de 10 folds
-train_control <- trainControl(method = "cv", number = 10)
+# Ajustar el modelo Elastic Net con F1-score
+set.seed(123)
 
-# Ajustar modelo con pesos de clase para equilibrar las clases
-tree_model <- 
+model1 <- train(Pobre ~ .,
+                data = train_hogares,
+                method = "glmnet",      # Elastic Net
+                family = "binomial",    # Regresión logística
+                metric = "F1",          # Usar F1 como métrica de evaluación
+                trControl = ctrl,
+                tuneGrid = expand.grid(
+                  alpha = seq(0, 1, by = 0.25),  # Alpha values for Elastic Net
+                  lambda = 10^seq(-1, -3, length = 10)  # Lambda values
+                )
+)
 
-  
-#### EXPORTAR
+# Mostrar los resultados del modelo
+model1
+
 predictSample <- test_hogares   %>% 
-  mutate(pobre = predict(tree_model, newdata = test, type = "raw")    ## predicted class labels
-  )  %>% select(id,pobre)
-
-predictSample<- predictSample %>% 
-  mutate(pobre=ifelse(pobre=="Yes",1,0)) %>% 
-  select(id,pobre)
+  mutate(Pobre = predict(model1, newdata = test_hogares, type = "raw")    ## predicted class labels
+  )  %>% select(id,Pobre)
 
 head(predictSample)
 
-name<- paste0("scripts/solo/Juan E/submissions/NOMBREcsv") 
+
+predictSample<- predictSample %>% 
+  mutate(Pobre=ifelse(Pobre=="Yes",1,0)) %>% 
+  select(id,Pobre)
+head(predictSample)  
+
+name<- paste0("scripts/solo/Juan E/submissions/","EN_lambda_", "", "_alpha_" , "", ".csv") 
+
+write.csv(predictSample,name, row.names = FALSE)
+
+
+#MODELO 2
+# Configuración del control del modelo con validación cruzada y SMOTE
+ctrl <- trainControl(method = "cv",
+                     number = 5,
+                     classProbs = TRUE,  # Necesario para obtener las probabilidades
+                     summaryFunction = prSummary,  # Usa precision, recall y F1-score
+                     savePredictions = TRUE,
+                     sampling = "smote")  # Aplicar SMOTE para balancear las clases
+
+# Entrenar el modelo logit con SMOTE
+set.seed(123)
+
+model2 <- train(Pobre ~ .,  # Usar la variable Pobre como objetivo
+                data = train_hogares,  # Conjunto de datos de entrenamiento
+                method = "glm",  # Regresión logística
+                family = "binomial",  # Especificar la familia binomial
+                metric = "F",  # F1-score como métrica
+                trControl = ctrl)
+
+# Mostrar los resultados del modelo
+model2
+
+
+predictSample <- test_hogares   %>% 
+  mutate(Pobre = predict(model1, newdata = test_hogares, type = "raw")    ## predicted class labels
+  )  %>% select(id,Pobre)
+
+head(predictSample)
+
+
+predictSample<- predictSample %>% 
+  mutate(Pobre=ifelse(Pobre=="Yes",1,0)) %>% 
+  select(id,Pobre)
+head(predictSample)  
+
+name<- paste0("scripts/solo/Juan E/submissions/","LO_lambda_", "", "_alpha_" , "", ".csv") 
+
 write.csv(predictSample,name, row.names = FALSE)
 
 
 
+#MODELO 3
+
+# Configuración del control del modelo con validación cruzada y F1-score
+ctrl <- trainControl(method = "cv",
+                     number = 5,
+                     classProbs = TRUE,  # Para obtener las probabilidades de clase
+                     summaryFunction = prSummary,  # Usar prSummary para obtener Precision, Recall y F1
+                     savePredictions = TRUE)
+
+# Ajustar el modelo Random Forest con restricciones en profundidad
+set.seed(123)
+
+model3 <- train(Pobre ~ .,                # Variable objetivo y variables predictoras
+                data = train_hogares,             # Conjunto de datos de entrenamiento
+                method = "rf",            # Random Forest
+                metric = "F",            # Usar F1 como métrica de evaluación
+                trControl = ctrl,         # Control del modelo (validación cruzada)
+                tuneGrid = expand.grid(
+                  mtry = c(2, 4, 6, 15)       # Ajustar diferentes valores de mtry (número de variables por split)
+                ),
+                ntree = 100,              # Reducir el número de árboles
+                nodesize = 15             # Tamaño mínimo del nodo
+)
+
+# Mostrar los resultados del modelo
+model3
+
+#Kaggle modelo 3:
+
+predictSample <- test   %>% 
+  mutate(Pobre = predict(model1, newdata = test_hogares, type = "raw")    ## predicted class labels
+  )  %>% select(id,Pobre)
+
+head(predictSample)
 
 
+predictSample<- predictSample %>% 
+  mutate(Pobre=ifelse(Pobre=="Yes",1,0)) %>% 
+  select(id,Pobre)
+head(predictSample)  
 
+name<- paste0("scripts/solo/Juan E/submissions/","RF_", "_", "mtry", ".csv") 
 
-
-
+write.csv(predictSample,name, row.names = FALSE)
