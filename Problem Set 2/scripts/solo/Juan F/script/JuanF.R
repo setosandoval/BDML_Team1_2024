@@ -496,3 +496,47 @@ write.csv(predictSample,name, row.names = FALSE)
 
 
 
+
+
+# Logit -SMOTE- (Modelo 2)
+# Cargar la librería adicional para SMOTE
+p_load(DMwR)  # Si no tienes esta función, usa install.packages("DMwR")
+
+# Configuración del control del modelo con validación cruzada y SMOTE
+ctrl <- trainControl(method = "cv",
+                     number = 5,
+                     classProbs = TRUE,  # Necesario para obtener las probabilidades
+                     summaryFunction = prSummary,  # Usa precision, recall y F1-score
+                     savePredictions = TRUE,
+                     sampling = "smote")  # Aplicar SMOTE para balancear las clases
+
+# Entrenar el modelo logit con SMOTE
+set.seed(098063)
+
+model2 <- train(Pobre ~ .,  # Usar la variable Pobre como objetivo
+                data = train,  # Conjunto de datos de entrenamiento
+                method = "glm",  # Regresión logística
+                family = "binomial",  # Especificar la familia binomial
+                metric = "F",  # F1-score como métrica
+                trControl = ctrl)
+
+# Mostrar los resultados del modelo
+model2
+
+# Kaggle modelo 2: ARREGLAR
+
+predictSample <- test   %>% 
+  mutate(pobre_lab = predict(model1, newdata = test, type = "raw")    ## predicted class labels
+  )  %>% select(id,pobre_lab)
+
+head(predictSample)
+
+
+predictSample<- predictSample %>% 
+  mutate(pobre=ifelse(pobre_lab=="Yes",1,0)) %>% 
+  select(id,pobre)
+head(predictSample)  
+
+name<- paste0("LO_lambda_", "0001", "_alpha_" , "025", ".csv") 
+
+write.csv(predictSample,name, row.names = FALSE)
