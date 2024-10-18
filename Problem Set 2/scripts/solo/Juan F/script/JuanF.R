@@ -446,3 +446,53 @@ test <- test %>%
 head(test)
 
 
+
+# Cargar la librería necesaria para prSummary
+library(caret)
+
+# Configuración del control del modelo con validación cruzada y F1-score
+ctrl <- trainControl(method = "cv",
+                     number = 5,
+                     classProbs = TRUE,  # Necesario para obtener las probabilidades
+                     summaryFunction = prSummary,  # Utilizar prSummary para precisión, recall y F1
+                     savePredictions = TRUE)
+
+# Ajustar el modelo Elastic Net con F1-score
+set.seed(098063)
+
+model1 <- train(Pobre ~ .,
+                data = train,
+                method = "glmnet",      # Elastic Net
+                family = "binomial",    # Regresión logística
+                metric = "F1",          # Usar F1 como métrica de evaluación
+                trControl = ctrl,
+                tuneGrid = expand.grid(
+                  alpha = seq(0, 1, by = 0.25),  # Alpha values for Elastic Net
+                  lambda = 10^seq(-1, -3, length = 10)  # Lambda values
+                )
+)
+
+# Mostrar los resultados del modelo
+model1
+
+
+# Kaggle modelo 1:
+
+predictSample <- test   %>% 
+  mutate(pobre_lab = predict(model1, newdata = test, type = "raw")    ## predicted class labels
+  )  %>% select(id,pobre_lab)
+
+head(predictSample)
+
+
+predictSample<- predictSample %>% 
+  mutate(pobre=ifelse(pobre_lab=="Yes",1,0)) %>% 
+  select(id,pobre)
+head(predictSample)  
+
+name<- paste0("EN_lambda_", "0001", "_alpha_" , "025", ".csv") 
+
+write.csv(predictSample,name, row.names = FALSE)
+
+
+
