@@ -540,3 +540,53 @@ head(predictSample)
 name<- paste0("LO_lambda_", "0001", "_alpha_" , "025", ".csv") 
 
 write.csv(predictSample,name, row.names = FALSE)
+
+
+
+
+# Random Forest (Modelo 3):
+
+library(caret)
+
+# Configuración del control del modelo con validación cruzada y F1-score
+ctrl <- trainControl(method = "cv",
+                     number = 5,
+                     classProbs = TRUE,  # Para obtener las probabilidades de clase
+                     summaryFunction = prSummary,  # Usar prSummary para obtener Precision, Recall y F1
+                     savePredictions = TRUE)
+
+# Ajustar el modelo Random Forest con restricciones en profundidad
+set.seed(098063)
+
+model3 <- train(Pobre ~ .,                # Variable objetivo y variables predictoras
+                data = train,             # Conjunto de datos de entrenamiento
+                method = "rf",            # Random Forest
+                metric = "F",            # Usar F1 como métrica de evaluación
+                trControl = ctrl,         # Control del modelo (validación cruzada)
+                tuneGrid = expand.grid(
+                  mtry = c(2, 4, 6, 15)       # Ajustar diferentes valores de mtry (número de variables por split)
+                ),
+                ntree = 100,              # Reducir el número de árboles
+                nodesize = 15             # Tamaño mínimo del nodo
+)
+
+# Mostrar los resultados del modelo
+model3
+
+#Kaggle modelo 3:
+
+predictSample <- test   %>% 
+  mutate(pobre_lab = predict(model1, newdata = test, type = "raw")    ## predicted class labels
+  )  %>% select(id,pobre_lab)
+
+head(predictSample)
+
+
+predictSample<- predictSample %>% 
+  mutate(pobre=ifelse(pobre_lab=="Yes",1,0)) %>% 
+  select(id,pobre)
+head(predictSample)  
+
+name<- paste0("RF_", "6_", "mtry", ".csv") 
+
+write.csv(predictSample,name, row.names = FALSE)
