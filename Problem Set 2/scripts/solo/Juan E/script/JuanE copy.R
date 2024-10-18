@@ -21,9 +21,9 @@ ctrl <- trainControl(method = "cv",
                      number = 5,
                      classProbs = TRUE,  # Necesario para obtener las probabilidades
                      summaryFunction = prSummary,  # Usa precision, recall y F
-                     savePredictions = TRUE)  # Aplicar SMOTE
+                     savePredictions = TRUE)  # 
 
-# Entrenar el modelo logit con SMOTE
+# Entrenar el modelo logit
 model_logit <- train(poor ~ ., 
                      data = train,
                      method = "glm", 
@@ -47,3 +47,43 @@ head(predictSample)
 
 name<- paste0("scripts/solo/Juan E/submissions/LOGIT.csv") 
 write.csv(predictSample,name, row.names = FALSE)
+
+
+#Random Forest
+
+p_load(ranger)
+
+
+ctrl <- trainControl(method = "cv",
+                     number = 5,
+                     classProbs = TRUE,  # Necesario para obtener las probabilidades
+                     summaryFunction = prSummary,  # Usa precision, recall y F
+                     savePredictions = TRUE,
+                     sampling = "smote")  # Aplicar undersampling/smote
+
+forest <- train(poor ~ ., 
+                data = train, 
+                method = "ranger",  
+                trControl = ctrl,
+                metric = "F",
+                num.trees = 100,  
+                tuneGrid = expand.grid(mtry = 4, splitrule = "gini", min.node.size = 30),
+                importance = "impurity")
+
+forest
+
+predictSample2 <- test   %>% 
+  mutate(poor = predict(forest, newdata = test, type = "raw")    ## predicted class labels
+  )  %>% select(id,poor)
+
+head(predictSample)
+
+
+predictSample2<- predictSample2 %>% 
+  mutate(poor=ifelse(poor=="Yes",1,0)) %>% 
+  select(id,poor)
+head(predictSample2)  
+
+
+name<- paste0("scripts/solo/Juan E/submissions/RF_trees_100_mtry_4_minnode_30.csv") 
+write.csv(predictSample2,name, row.names = FALSE)
