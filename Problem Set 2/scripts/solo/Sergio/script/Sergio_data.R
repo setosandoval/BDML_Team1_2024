@@ -34,7 +34,6 @@ train_personas<- train_personas[, common_personas]
 
 
 # HOUSEHOLD 
-
 hogares <- function(data_hogares,...){
   data_hogares <- data_hogares %>% 
     mutate(dom = factor(Dominio),
@@ -51,7 +50,6 @@ hogares <- function(data_hogares,...){
 
 
 # INDIVIDUAL DATA 
-
 personas <- function(data_personas,...){
   data_personas <- data_personas %>%
     mutate(sex = ifelse(P6020 == 2, 1, 0), 
@@ -76,7 +74,6 @@ personas <- function(data_personas,...){
 
 
 # Household head
-
 head <- function(data_personas,...){
   info_head <- data_personas %>% 
     filter(head==1) %>% 
@@ -93,7 +90,6 @@ head <- function(data_personas,...){
 
 
 # MERGED 
-
 personas_hogares <- function(data_personas,...){
   info_personas <- data_personas %>%
     group_by(id) %>%
@@ -140,5 +136,6 @@ train <- train %>%
 # Test Data
 test <- final_data(test_hogares, test_personas)
 
-
+saveRDS(train, file = "scripts/solo/Sergio/data/train_Sergio.rds")
+saveRDS(test, file = "scripts/solo/Sergio/data/test_Sergio.rds")
 
