@@ -13,160 +13,82 @@ setwd("/Users/home/Library/Mobile Documents/com~apple~CloudDocs/Universidad/Seme
 
 # Libraries
 library(pacman)
-p_load(tidyverse) # Tidy-data
+p_load(tidyverse, # Tidy-data
+       glmnet,     # Regularization algorithms. 
+       caret,      # Predictive models
+       Metrics,
+       ranger,
+       xgboost,
+       MLmetrics)
 
 # Data
-train_hogares<-read.csv("stores/data/raw/train_hogares.csv")
-test_hogares<-read.csv("stores/data/raw/test_hogares.csv")
-
-train_personas<-read.csv("stores/data/raw/train_personas.csv")
-test_personas<-read.csv("stores/data/raw/test_personas.csv")
-
-# Find the intersection of the vars between the train and test 
-common_hogares <- intersect(names(train_hogares), names(test_hogares))
-common_hogares <- c(common_hogares, "Pobre")
-common_personas <- intersect(names(train_personas), names(test_personas))
-
-# Keep only vars between train and test
-train_hogares <- train_hogares[, common_hogares]
-train_personas<- train_personas[, common_personas]
-
-colSums(is.na(test_hogares))
-colSums(is.na(test_personas))
+train <- readRDS("scripts/solo/Mafe/train.rds")
+test <- readRDS("scripts/solo/Mafe/test.rds")
 
 
-train_hogares<- train_hogares %>% 
-  mutate(poor = factor(Pobre,levels=c(0,1),labels=c("No","Yes")),
-         dom = factor(Dominio),
-         urban = ifelse(Clase==1,1,0),
-         urban = factor(urban,levels=c(0,1),labels=c("Rural","Urban")),
-         room_p = ifelse(P5010 > 0, Nper / P5010, NA),
-         kind = case_when(
-           P5090 %in% c(1, 2) ~ 1,       # Group "Propia, totalmente pagada" and "Propia, la están pagando"
-           P5090 %in% c(3, 4) ~ 2,       # Group "En arriendo o subarriendo" and "En usufructo"
-           P5090 %in% c(5, 6) ~ 3 ),     # Group "Posesión sin título" and "Otra"
-         kind = factor(kind, levels = c(1, 2, 3), labels = c("Owned", "Rented", "No Property"))) %>% 
-  rename(num_per = Nper,
-         num_per_u = Npersug,
-         lp = Lp,
-         fex_c = Fex_c) %>% 
-  select(id, poor, urban, room_p, kind, num_per, num_per_u, lp, fex_c, dom)
+############### ELASTIC NET
+ctrl <- trainControl(method = "cv",
+                     number = 5,
+                     classProbs = TRUE,  # Necesario para obtener las probabilidades
+                     summaryFunction = prSummary,  # Usa precision, recall y F
+                     savePredictions = TRUE,
+                     verboselter = TRUE)
 
-colSums(is.na(train_hogares))
+model1 <- train(poor~.,
+                data = train,
+                metric = "F",
+                method = "glmnet",
+                trControl = ctrl,
+                family = "binomial",
+                tuneGrid = expand.grid(
+                  alpha = 0.5,  # Valor específico de alpha
+                  lambda = 0.01  # Valor específico de lambda
+                )
+)
 
+model1
 
-train_personas <- train_personas %>%
-  mutate(sex = ifelse(P6020==2,1,0), 
-         sex = factor(sex,levels=c(0,1),labels=c("Male","Female")),
-         soc_sec = ifelse(is.na(P6090), 0, ifelse(P6090 == 1, 1, 0)),
-         soc_sec = factor(soc_sec,levels=c(0,1),labels=c("No","Yes")),
-         educ = ifelse(is.na(P6210), 1, ifelse(P6210==9,1,P6210)),
-         educ = factor(educ,levels=c(1:6), labels=c('None', 'Preschool', 'Primary', 'Secondary', 'High School', 'University')),
-         subs = ifelse(P6585s1 == 1, 1, 0) + 
-           ifelse(P6585s2 == 1, 1, 0) + 
-           ifelse(P6585s3 == 1, 1, 0) + 
-           ifelse(P6585s4 == 1, 1, 0),
-         subs = ifelse(is.na(subs), 0, subs),
-         subs = ifelse(is.na(subs), 0, subs),
-         unemp = ifelse(is.na(Oc),1,0),
-         unact = ifelse(is.na(Ina),0,1)) %>% 
-  rename(fex_c_per = Fex_c) %>% 
-  select(id, sex, soc_sec, educ, subs, unemp, unact, fex_c_per)
+# SUBMISSION
+predictSample <- test   %>% 
+  mutate(pobre = predict(model1, newdata = test, type = "raw")    ## predicted class labels
+  )  %>% select(id,pobre)
 
-colSums(is.na(train_personas))
+predictSample<- predictSample %>% 
+  mutate(pobre=ifelse(pobre=="Yes",1,0)) %>% 
+  select(id,pobre)
 
-# Agrupar por hogar y calcular la proporción de mujeres
-info_personas <- train_personas %>%
-  group_by(id) %>%
-  summarise(num_female = sum(as.numeric(sex)),
-            num_socsec = sum(as.numeric(soc_sec)),
-            max_educ = max(as.numeric(educ)),
-            subs = sum(subs),
-            num_unemp = sum(unemp),
-            num_unact = sum(unact),
-            sum_fex_cper = sum (fex_c_per)) %>% 
-  select(id, num_female, num_socsec, max_educ, subs, num_unemp, num_unact, sum_fex_cper)
+head(predictSample)
+
+name<- paste0("scripts/solo/Mafe/submissions/EN_alpha_0.5_lambda_0.01.csv") 
+write.csv(predictSample,name, row.names = FALSE)
 
 
-# Unir con la base de datos de hogares
-train_hogares <- train_hogares %>%
-  left_join(info_personas, by = "id") %>%
-  mutate(max_educ = factor(max_educ,levels=c(1:6), labels=c('None', 'Preschool', 'Primary', 'Secondary', 'High School', 'University')))
+########### LOGIT
+model_logit <- train(poor ~., 
+                     data = train,
+                     method = "glm", 
+                     family = "binomial",
+                     metric = "F",  # F1-score como métrica
+                     trControl = ctrl)
 
-colSums(is.na(train_hogares))
-
-
-########## TEST, luego hacer funcion que lo haga por ambos
-test_hogares <- test_hogares %>% 
-  mutate(dom = factor(Dominio),
-         urban = ifelse(Clase==1,1,0),
-         urban = factor(urban,levels=c(0,1),labels=c("Rural","Urban")),
-         room_p = ifelse(P5010 > 0, Nper / P5010, NA),
-         kind = case_when(
-           P5090 %in% c(1, 2) ~ 1,       # Group "Propia, totalmente pagada" and "Propia, la están pagando"
-           P5090 %in% c(3, 4) ~ 2,       # Group "En arriendo o subarriendo" and "En usufructo"
-           P5090 %in% c(5, 6) ~ 3 ),     # Group "Posesión sin título" and "Otra"
-         kind = factor(kind, levels = c(1, 2, 3), labels = c("Owned", "Rented", "No Property"))) %>% 
-  rename(num_per = Nper,
-         num_per_u = Npersug,
-         lp = Lp,
-         fex_c = Fex_c) %>% 
-  select(id, urban, room_p, kind, num_per, num_per_u, lp, fex_c, dom)
-#quitar dom
-
-colSums(is.na(test_hogares))
+model_logit
 
 
-test_personas <- test_personas %>%
-  mutate(sex = ifelse(P6020==2,1,0), 
-         sex = factor(sex,levels=c(0,1),labels=c("Male","Female")),
-         soc_sec = ifelse(is.na(P6090), 0, ifelse(P6090 == 1, 1, 0)),
-         soc_sec = factor(soc_sec,levels=c(0,1),labels=c("No","Yes")),
-         educ = ifelse(is.na(P6210), 1, ifelse(P6210==9,1,P6210)),
-         educ = factor(educ,levels=c(1:6), labels=c('None', 'Preschool', 'Primary', 'Secondary', 'High School', 'University')),
-         subs = ifelse(P6585s1 == 1, 1, 0) + 
-           ifelse(P6585s2 == 1, 1, 0) + 
-           ifelse(P6585s3 == 1, 1, 0) + 
-           ifelse(P6585s4 == 1, 1, 0),
-         subs = ifelse(is.na(subs), 0, subs),
-         subs = ifelse(is.na(subs), 0, subs),
-         unemp = ifelse(is.na(Oc),1,0),
-         unact = ifelse(is.na(Ina),0,1)) %>% 
-  rename(fex_c_per = Fex_c) %>% 
-  select(id, sex, soc_sec, educ, subs, unemp, unact, fex_c_per)
-# Falto Fex_c persona
+# SUBMISSION
+predictSample <- test   %>% 
+  mutate(pobre = predict(model_logit, newdata = test, type = "raw")    ## predicted class labels
+  )  %>% select(id,pobre)
 
-colSums(is.na(test_personas))
+predictSample<- predictSample %>% 
+  mutate(pobre=ifelse(pobre=="Yes",1,0)) %>% 
+  select(id,pobre)
 
-# Agrupar por hogar y calcular la proporción de mujeres
-info_personas2 <- test_personas %>%
-  group_by(id) %>%
-  summarise(num_female = sum(as.numeric(sex)),
-            num_socsec = sum(as.numeric(soc_sec)),
-            max_educ = max(as.numeric(educ)),
-            subs = sum(subs),
-            num_unemp = sum(unemp),
-            num_unact = sum(unact),
-            sum_fex_cper = sum (fex_c_per)) %>% 
-  select(id, num_female, num_socsec, max_educ, subs, num_unemp, num_unact, sum_fex_cper)
-#max educ podría ser factor
+head(predictSample)
 
-# Unir con la base de datos de hogares y var categóricas
-test_hogares <- test_hogares %>%
-  left_join(info_personas2, by = "id") %>%
-  mutate(max_educ = factor(max_educ,levels=c(1:6), labels=c('None', 'Preschool', 'Primary', 'Secondary', 'High School', 'University')))
-
-colSums(is.na(test_hogares))
+name<- paste0("scripts/solo/Mafe/submissions/Logit.csv") 
+write.csv(predictSample,name, row.names = FALSE)
 
 
-
-######## Guardar #############
-# Guardar el dataframe en formato .rds
-train_hogares <- train_hogares  %>%
-  select(-id)
-
-saveRDS(train_hogares, file = "scripts/solo/Mafe/train.rds")
-saveRDS(test_hogares, file = "scripts/solo/Mafe/test.rds")
 
 
 
