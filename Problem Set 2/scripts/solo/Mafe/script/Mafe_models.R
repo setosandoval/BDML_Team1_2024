@@ -32,7 +32,7 @@ ctrl <- trainControl(method = "cv",
                      classProbs = TRUE,  # Necesario para obtener las probabilidades
                      summaryFunction = prSummary,  # Usa precision, recall y F
                      savePredictions = TRUE,
-                     verboselter = TRUE)
+                     verboseIter = TRUE)
 
 model1 <- train(poor~.,
                 data = train,
@@ -89,8 +89,73 @@ name<- paste0("scripts/solo/Mafe/submissions/Logit.csv")
 write.csv(predictSample,name, row.names = FALSE)
 
 
+### LOGIT UNDERSMAPLING
+
+# Configuración del control del modelo con validación cruzada y undersampling
+ctrl <- trainControl(method = "cv",
+                     number = 5,
+                     classProbs = TRUE,  # Necesario para obtener las probabilidades
+                     summaryFunction = prSummary,  # Usa precision, recall y F
+                     savePredictions = TRUE,
+                     sampling = "down")  # Aplicar undersampling
+
+# Entrenar el modelo logit con undersampling
+model_logit_under <- train(poor ~ ., 
+                           data = train,
+                           method = "glm", 
+                           family = "binomial",
+                           metric = "F",  # F1-score como métrica
+                           trControl = ctrl)
+
+model_logit_under
+
+# SUBMISSION
+predictSample <- test   %>% 
+  mutate(pobre = predict(model_logit_under, newdata = test, type = "raw")    ## predicted class labels
+  )  %>% select(id,pobre)
+
+predictSample<- predictSample %>% 
+  mutate(pobre=ifelse(pobre=="Yes",1,0)) %>% 
+  select(id,pobre)
+
+head(predictSample)
+
+name<- paste0("scripts/solo/Mafe/submissions/Logit_under_s.csv") 
+write.csv(predictSample,name, row.names = FALSE)
 
 
+
+########################  LOGIT SMOTE
+ctrl <- trainControl(method = "cv",
+                     number = 5,
+                     classProbs = TRUE,  # Necesario para obtener las probabilidades
+                     summaryFunction = prSummary,  # Usa precision, recall y F
+                     savePredictions = TRUE,
+                     sampling = "smote",
+                     verboseIter = TRUE)  # Aplicar SMOTE
+
+# Entrenar el modelo logit con SMOTE
+model_logit_smote <- train(poor ~ ., 
+                           data = train,
+                           method = "glm", 
+                           family = "binomial",
+                           metric = "F",  # F1-score como métrica
+                           trControl = ctrl)
+model_logit_smote
+
+# SUBMISSION
+predictSample <- test   %>% 
+  mutate(pobre = predict(model_logit_smote, newdata = test, type = "raw")    ## predicted class labels
+  )  %>% select(id,pobre)
+
+predictSample<- predictSample %>% 
+  mutate(pobre=ifelse(pobre=="Yes",1,0)) %>% 
+  select(id,pobre)
+
+head(predictSample)
+
+name<- paste0("scripts/solo/Mafe/submissions/Logit_SMOTE.csv") 
+write.csv(predictSample,name, row.names = FALSE)
 
 
 
