@@ -10,7 +10,7 @@
 #         - Juan Gutierrez                                                   #
 # ========================================================================== #
 
-# ENVIRONMENT SETUP AND PACKAGE LOADING ======================================
+# ENVIRONMENT SETUP AND DATA UPLOADING =========================================
 
 # Set working directory
 setwd("/Users/sergiosandovalcamargo/Documents/BDML/Repositorio P. Sets/BDML_Team1_2024/Problem Set 2")
