@@ -159,3 +159,41 @@ write.csv(predictSample,name, row.names = FALSE)
 
 
 
+
+#### Random forest
+p_load(ranger)
+
+ctrl <- trainControl(method = "cv",
+                     number = 5,
+                     classProbs = TRUE,  # Necesario para obtener las probabilidades
+                     summaryFunction = prSummary,  # Usa precision, recall y F
+                     savePredictions = TRUE,
+                     sampling = "smote")  # Aplicar undersampling/smote
+
+forest <- train(poor ~ ., 
+                data = train, 
+                method = "ranger",  
+                trControl = ctrl,
+                metric = "F",
+                num.trees = 100,  
+                tuneGrid = expand.grid(mtry = 4, splitrule = "gini", min.node.size = 25),
+                importance = "impurity")
+
+forest
+
+# SUBMISSION
+predictSample4 <- test   %>% 
+  mutate(pobre = predict(forest, newdata = test, type = "raw")    ## predicted class labels
+  )  %>% select(id,pobre)
+
+predictSample4<- predictSample4 %>% 
+  mutate(pobre=ifelse(pobre=="Yes",1,0)) %>% 
+  select(id,pobre)
+
+head(predictSample4)
+
+name<- paste0("scripts/solo/Mafe/submissions/RF_mtry_4_minN_25.csv") 
+write.csv(predictSample4,name, row.names = FALSE)
+
+
+
