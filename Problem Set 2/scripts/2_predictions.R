@@ -349,7 +349,7 @@ write.csv(predictSample, name, row.names = FALSE)
 
 # Hyperparameter grid for Random Forest
 tune_grid_rf <- expand.grid(
-  mtry = c(4, 6, 8),            
+  mtry = c(5, 6, 8),            
   splitrule = "gini",           
   min.node.size = c(10, 20))  
 
@@ -393,7 +393,7 @@ predictSample <- predictSample %>%
 
 head(predictSample)
 
-name <- paste0("stores/submissions/06_n200_RF_mtry_8.csv") 
+name <- paste0("stores/submissions/06_n200_RF_mtry_5.csv") 
 write.csv(predictSample, name, row.names = FALSE)
 
 
@@ -404,7 +404,7 @@ write.csv(predictSample, name, row.names = FALSE)
 tune_grid_xgb <- expand.grid(
   nrounds = 200,         
   max_depth = c(4, 6),            
-  eta = c(0.05, 0.1),            
+  eta = c(0.05, 0.2),            
   gamma = c(0,1),                     
   colsample_bytree = 0.8,         
   min_child_weight = 10,         
@@ -451,7 +451,7 @@ predictSample <- predictSample %>%
 
 head(predictSample)
 
-name <- paste0("stores/submissions/07_XGB_n200_eta_0.1_gamma_0.csv") 
+name <- paste0("stores/submissions/07_XGB_n200_eta_0.2_gamma_0.csv") 
 write.csv(predictSample, name, row.names = FALSE)
 
 
@@ -701,7 +701,7 @@ write.csv(predictSample, name, row.names = FALSE)
 
 # Hyperparameter grid for Random Forest
 tune_grid_rf <- expand.grid(
-  mtry = c(4, 6, 8),            
+  mtry = c(5, 6, 8),            
   splitrule = "gini",           
   min.node.size = c(10, 20))  
 
@@ -745,7 +745,7 @@ predictSample <- predictSample %>%
 
 head(predictSample)
 
-name <- paste0("stores/submissions/13_n200_RF_mtry_8_SMOTE.csv") 
+name <- paste0("stores/submissions/13_n200_RF_mtry_5_SMOTE.csv") 
 write.csv(predictSample, name, row.names = FALSE)
 
 
@@ -756,7 +756,7 @@ write.csv(predictSample, name, row.names = FALSE)
 tune_grid_xgb <- expand.grid(
   nrounds = 200,         
   max_depth = c(4, 6),            
-  eta = c(0.05, 0.1),            
+  eta = c(0.05, 0.2),            
   gamma = c(0,1),                     
   colsample_bytree = 0.8,         
   min_child_weight = 10,         
@@ -803,10 +803,210 @@ predictSample <- predictSample %>%
 
 head(predictSample)
 
-name <- paste0("stores/submissions/14_XGB_n200_eta_0.1_gamma_0_SMOTE.csv") 
+name <- paste0("stores/submissions/14_XGB_n200_eta_0.2_gamma_0_SMOTE.csv") 
 write.csv(predictSample, name, row.names = FALSE)
 
 
 
 # =============================== FINAL MODELS =============================== #
+
+
+
+# 15) Model: Logit Kaggle =======================================================
+
+ctrl <- trainControl(method = "cv",
+                     number = 5,                  
+                     classProbs = TRUE,           
+                     summaryFunction = prSummary,
+                     savePredictions = TRUE,      
+                     verboseIter = TRUE,
+                     sampling = "smote")          # SMOTE sample
+
+# Logit model on sub-train data
+model15_logit_sub <- train(poor ~ ., 
+                          data = sub_train, 
+                          method = "glm", 
+                          family = "binomial", 
+                          metric = "F",               
+                          trControl = ctrl)
+
+model15_logit_sub
+
+# Predict probabilities on sub_test
+test_probs <- predict(model15_logit_sub, newdata = sub_test, type = "prob")[, "Yes"]
+
+# Search for the optimal threshold to maximize F1-score
+thresholds <- seq(0.05, 0.95, by = 0.01)  
+f1_scores <- sapply(thresholds, calculate_f1_manual, true_labels = sub_test$poor, predicted_probs = test_probs)
+
+# Find the threshold with the highest F1-score
+optimal_threshold <- thresholds[which.max(f1_scores)]
+optimal_f1 <- max(f1_scores)
+
+# Print the optimal threshold and F1-score
+print(paste("Optimal Threshold:", optimal_threshold))       # 0.61
+print(paste("F1-score at Optimal Threshold:", optimal_f1))  # 0.64
+
+# Logit model on full train data
+model15_logit <- train(poor ~ ., 
+                      data = train, 
+                      method = "glm", 
+                      family = "binomial", 
+                      metric = "F",             
+                      trControl = ctrl)
+
+model15_logit
+
+# Submission
+test_probs <- predict(model15_logit_sub, newdata = test, type = "prob")[, "Yes"]
+
+# Use optimal threshold founded before
+final_test_preds <- ifelse(test_probs >= optimal_threshold, "Yes", "No")
+
+# SUBMISSION
+predictSample <- test %>% 
+  mutate(pobre = ifelse(final_test_preds == "Yes", 1, 0)) %>% 
+  select(id,pobre)
+
+head(predictSample)
+
+name<- paste0("stores/submissions/15_LOGIT_SMOTE.csv") 
+write.csv(predictSample, name, row.names = FALSE)
+
+
+
+# 16) Model: Random Forest Kaggle ==============================================
+
+# Hyperparameter grid for Random Forest
+tune_grid_rf <- expand.grid(
+  mtry = 5,            
+  splitrule = "gini",           
+  min.node.size = 20)  
+
+# Train Random Forest model on sub-train data
+model16_rf_sub <- train(poor ~ ., 
+                        data = sub_train, 
+                        method = "ranger",           
+                        metric = "F",               
+                        trControl = ctrl,          
+                        tuneGrid = tune_grid_rf,    
+                        num.trees = 200)             
+
+model16_rf_sub
+
+# Predict probabilities on sub_test
+test_probs <- predict(model16_rf_sub, newdata = sub_test, type = "prob")[, "Yes"]
+
+# Search for the optimal threshold to maximize F1-score
+thresholds <- seq(0.05, 0.95, by = 0.01)  
+f1_scores <- sapply(thresholds, calculate_f1_manual, true_labels = sub_test$poor, predicted_probs = test_probs)
+
+# Find the threshold with the highest F1-score
+optimal_threshold <- thresholds[which.max(f1_scores)]
+optimal_f1 <- max(f1_scores)
+
+# Print the optimal threshold and F1-score
+print(paste("Optimal Threshold:", optimal_threshold))       # 0.39
+print(paste("F1-score at Optimal Threshold:", optimal_f1))  # 0.65
+
+# Train Random Forest model on full train data
+model16_rf <- train(poor ~ ., 
+                    data = train, 
+                    method = "ranger", 
+                    metric = "F", 
+                    trControl = ctrl, 
+                    tuneGrid = tune_grid_rf, 
+                    num.trees = 200)
+
+model16_rf
+
+# Submission
+test_probs <- predict(model16_rf, newdata = test, type = "prob")[, "Yes"]
+
+# Use optimal threshold founded before
+final_test_preds <- ifelse(test_probs >= optimal_threshold, "Yes", "No")
+
+# SUBMISSION
+predictSample <- test %>% 
+  mutate(pobre = ifelse(final_test_preds == "Yes", 1, 0)) %>% 
+  select(id,pobre)
+
+head(predictSample)
+
+name <- paste0("stores/submissions/16_n200_RF_mtry_5_SMOTE.csv") 
+write.csv(predictSample, name, row.names = FALSE)
+
+
+
+# 17) Model: XGBoost Kaggle ====================================================
+
+# Hyperparameter grid for XGBoost
+tune_grid_xgb <- expand.grid(
+  nrounds = 200,         
+  max_depth = 4,            
+  eta = 0.2,            
+  gamma = 0,                     
+  colsample_bytree = 0.8,         
+  min_child_weight = 10,         
+  subsample = 0.8               
+)
+
+# Train XGBoost model on sub-train data
+model17_xgb_sub <- train(poor ~ ., 
+                         data = sub_train, 
+                         method = "xgbTree",        
+                         metric = "F",               
+                         trControl = ctrl,       
+                         tuneGrid = tune_grid_xgb,  
+                         nthread = 4)              
+
+model17_xgb_sub
+
+# Predict probabilities on sub_test
+test_probs <- predict(model17_xgb_sub, newdata = sub_test, type = "prob")[, "Yes"]
+
+# Search for the optimal threshold to maximize F1-score
+thresholds <- seq(0.05, 0.95, by = 0.01)  
+f1_scores <- sapply(thresholds, calculate_f1_manual, true_labels = sub_test$poor, predicted_probs = test_probs)
+
+# Find the threshold with the highest F1-score
+optimal_threshold <- thresholds[which.max(f1_scores)]
+optimal_f1 <- max(f1_scores)
+
+# Print the optimal threshold and F1-score
+print(paste("Optimal Threshold:", optimal_threshold))       # 0.34
+print(paste("F1-score at Optimal Threshold:", optimal_f1))  # 0.67
+
+# Train XGBoost model on full train data
+model17_xgb <- train(poor ~ ., 
+                     data = train, 
+                     method = "xgbTree", 
+                     metric = "F", 
+                     trControl = ctrl, 
+                     tuneGrid = tune_grid_xgb, 
+                     nthread = 4)
+
+model17_xgb
+
+# Submission
+predictSample <- test %>% 
+  mutate(pobre = predict(model17_xgb, newdata = test, type = "raw")) %>% 
+  select(id, pobre)
+
+predictSample <- predictSample %>% 
+  mutate(pobre = ifelse(pobre == "Yes", 1, 0)) %>% 
+  select(id, pobre)
+
+head(predictSample)
+
+name <- paste0("stores/submissions/17_XGB_n200_eta_0.2_gamma_0_SMOTE.csv") 
+write.csv(predictSample, name, row.names = FALSE)
+
+
+
+
+
+
+
+
 
