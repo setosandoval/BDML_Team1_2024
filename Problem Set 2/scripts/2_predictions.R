@@ -890,7 +890,8 @@ model16_rf_sub <- train(poor ~ .,
                         metric = "F",               
                         trControl = ctrl,          
                         tuneGrid = tune_grid_rf,    
-                        num.trees = 200)             
+                        num.trees = 200,
+                        importance = "impurity")             
 
 model16_rf_sub
 
@@ -916,7 +917,8 @@ model16_rf <- train(poor ~ .,
                     metric = "F", 
                     trControl = ctrl, 
                     tuneGrid = tune_grid_rf, 
-                    num.trees = 200)
+                    num.trees = 200,
+                    importance = "impurity")
 
 model16_rf
 
@@ -1004,9 +1006,40 @@ write.csv(predictSample, name, row.names = FALSE)
 
 
 
+# Variable Importance ==========================================================
+
+# RF
+importance_values <- ranger::importance(model16_rf$finalModel)
+
+importance_df <- data.frame(
+  Variable = names(importance_values),
+  Importance = importance_values)
+
+importance_df_top40 <- importance_df %>%
+  arrange(desc(Importance)) %>%
+  head(40)
+
+rf_importance_plot <- ggplot(importance_df_top40, aes(x = reorder(Variable, Importance), y = Importance)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Top 40 Variable Importance in Random Forest", x = "Variable", y = "Importance")
+
+ggsave("views/RF_var_importance.pdf", plot = rf_importance_plot, width = 10, height = 8)
 
 
+# XGB
+final_xgb <- model17_xgb$finalModel
+importance_matrix <- xgb.importance(model = final_xgb)
 
+top_40_importance <- head(importance_matrix, 40)
+xgb.plot.importance(top_40_importance)
 
+importance_df <- as.data.frame(top_40_importance)
 
+xgb_importance_plot <- ggplot(importance_df, aes(x = reorder(Feature, Gain), y = Gain)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Top 40 Variable Importance in XGBoost", x = "Variable", y = "Importance")
+
+ggsave("views/XGB_var_importance.pdf", plot = xgb_importance_plot, width = 10, height = 8)
 

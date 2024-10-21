@@ -224,7 +224,7 @@ personas_hogares <- function(data_personas,...){
   # 15. head: 1[household head]
   # 16. subs: # subsidies
   # 17. num_unemp: # unemployed
-  # 18. inact: # inactives
+  # 18. num_inact: # inactives
   # 19. fex_c_p: individual expansion factor
   # 20. head_female: 1[female]
   # 21. head_age: age
