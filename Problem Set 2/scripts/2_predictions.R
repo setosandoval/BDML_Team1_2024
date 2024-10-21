@@ -104,6 +104,11 @@ calculate_f1_manual <- function(threshold, true_labels, predicted_probs) {
 
 
 
+
+# ================================== MODELS ================================== #
+
+
+
 # 1) Model: Logit ==============================================================
 
 ctrl <- trainControl(method = "cv",
@@ -151,7 +156,7 @@ predictSample<- predictSample %>%
 
 head(predictSample)
 
-name<- paste0("stores/submissions/Logit.csv") 
+name<- paste0("stores/submissions/01_Logit.csv") 
 write.csv(predictSample,name, row.names = FALSE)
 
 
@@ -449,4 +454,359 @@ head(predictSample)
 name <- paste0("stores/submissions/07_XGB_n200_eta_0.1_gamma_0.csv") 
 write.csv(predictSample, name, row.names = FALSE)
 
+
+
+# =============================== SMOTE MODELS =============================== #
+
+
+
+# 8) Model: Logit SMOTE ========================================================
+
+ctrl <- trainControl(method = "cv",
+                     number = 5,                  
+                     classProbs = TRUE,           
+                     summaryFunction = prSummary,
+                     savePredictions = TRUE,      
+                     verboseIter = TRUE,
+                     sampling = "smote")          # SMOTE sample
+
+# Logit model on sub-train data
+model8_logit_sub <- train(poor ~ ., 
+                          data = sub_train, 
+                          method = "glm", 
+                          family = "binomial", 
+                          metric = "F",               
+                          trControl = ctrl)
+
+model8_logit_sub
+
+# Predict probabilities on sub_test
+test_preds <- predict(model8_logit_sub, newdata = sub_test, type = "raw")
+
+# F1 score out of sample
+f1_score <- calculate_f1(true_labels = sub_test$poor, predicted_labels = test_preds)
+print(paste("F1-score Threshold:", f1_score))  # 0.63
+
+# Logit model on full train data
+model8_logit <- train(poor ~ ., 
+                      data = train, 
+                      method = "glm", 
+                      family = "binomial", 
+                      metric = "F",              
+                      trControl = ctrl)
+
+model8_logit
+
+# Submission
+predictSample <- test   %>% 
+  mutate(pobre = predict(model8_logit, newdata = test, type = "raw")) %>% 
+  select(id,pobre)
+
+predictSample<- predictSample %>% 
+  mutate(pobre=ifelse(pobre=="Yes",1,0)) %>% 
+  select(id,pobre)
+
+head(predictSample)
+
+name<- paste0("stores/submissions/08_Logit_SMOTE.csv") 
+write.csv(predictSample,name, row.names = FALSE)
+
+
+
+# 9) Model: LDA SMOTE ==========================================================
+
+# LDA model on sub-train data
+model9_lda_sub <- train(poor ~ ., 
+                        data = sub_train, 
+                        method = "lda",          
+                        metric = "F",             
+                        trControl = ctrl)
+
+model9_lda_sub
+
+# Predict class labels on sub_test
+test_preds <- predict(model9_lda_sub, newdata = sub_test, type = "raw")
+
+# F1 score out of sample
+f1_score <- calculate_f1(true_labels = sub_test$poor, predicted_labels = test_preds)
+print(paste("F1-score LDA:", f1_score))  # 0.60
+
+# LDA model on full train data
+model9_lda <- train(poor ~ ., 
+                    data = train, 
+                    method = "lda",          
+                    metric = "F",             
+                    trControl = ctrl)
+
+model9_lda
+
+# Submission
+predictSample <- test   %>% 
+  mutate(pobre = predict(model9_lda, newdata = test, type = "raw")) %>% 
+  select(id,pobre)
+
+predictSample<- predictSample %>% 
+  mutate(pobre=ifelse(pobre=="Yes",1,0)) %>% 
+  select(id,pobre)
+
+head(predictSample)
+
+name<- paste0("stores/submissions/09_LDA_SMOTE.csv") 
+write.csv(predictSample,name, row.names = FALSE)
+
+
+
+# 10) Model: QDA SMOTE =========================================================
+
+# QDA model on sub-train data
+model10_qda_sub <- train(poor ~ ., 
+                        data = sub_train, 
+                        method = "qda",           
+                        metric = "F",             
+                        trControl = ctrl)
+
+model10_qda_sub
+
+# Predict class labels on sub_test
+test_preds <- predict(model10_qda_sub, newdata = sub_test, type = "raw")
+
+# F1 score out of sample
+f1_score <- calculate_f1(true_labels = sub_test$poor, predicted_labels = test_preds)
+print(paste("F1-score QDA:", f1_score))  #0.53
+
+# QDA model on full train data
+model10_qda <- train(poor ~ ., 
+                    data = train, 
+                    method = "qda",          
+                    metric = "F",            
+                    trControl = ctrl)
+
+model10_qda
+
+# Submission
+predictSample <- test %>% 
+  mutate(pobre = predict(model10_qda, newdata = test, type = "raw")) %>% 
+  select(id, pobre)
+
+predictSample <- predictSample %>% 
+  mutate(pobre = ifelse(pobre == "Yes", 1, 0)) %>% 
+  select(id, pobre)
+
+head(predictSample)
+
+name <- paste0("stores/submissions/10_QDA_SMOTE.csv") 
+write.csv(predictSample, name, row.names = FALSE)
+
+
+# 11) Model: Elastic Net SMOTE =================================================
+
+# Grid
+tune_grid_enet <- expand.grid(
+  alpha = seq(0.1, 1, length = 5),    
+  lambda = 10^seq(-2, 1, length = 5)) 
+
+# Train Elastic Net on sub-train data
+model11_en_sub <- train(poor ~ ., 
+                       data = sub_train, 
+                       method = "glmnet",       
+                       metric = "F",             
+                       trControl = ctrl,         
+                       tuneGrid = tune_grid_enet) 
+
+model11_en_sub
+
+# Predict class labels on sub_test
+test_preds <- predict(model11_en_sub, newdata = sub_test, type = "raw")
+
+# F1 score out of sample
+f1_score <- calculate_f1(true_labels = sub_test$poor, predicted_labels = test_preds)
+print(paste("F1-score Elastic Net:", f1_score))  # 0.58
+
+# Elastic Net model on full train data
+model11_en <- train(poor ~ ., 
+                   data = train, 
+                   method = "glmnet", 
+                   metric = "F", 
+                   trControl = ctrl, 
+                   tuneGrid = tune_grid_enet)
+
+model11_en
+
+# Submission
+predictSample <- test %>% 
+  mutate(pobre = predict(model11_en, newdata = test, type = "raw")) %>% 
+  select(id, pobre)
+
+predictSample <- predictSample %>% 
+  mutate(pobre = ifelse(pobre == "Yes", 1, 0)) %>% 
+  select(id, pobre)
+
+head(predictSample)
+
+name <- paste0("stores/submissions/11_EN_alpha_0.1_lambda_10_SMOTE.csv") 
+write.csv(predictSample, name, row.names = FALSE)
+
+
+
+# 12) Model: CART SMOTE ========================================================
+
+# Hyperparameter grid for CART
+tune_grid_cart <- expand.grid(
+  cp = seq(0.001, 0.1, length = 10))  
+
+# Train CART model on sub-train data
+model12_cart_sub <- train(poor ~ ., 
+                         data = sub_train, 
+                         method = "rpart",          
+                         metric = "F",             
+                         trControl = ctrl,          
+                         tuneGrid = tune_grid_cart) 
+
+model12_cart_sub
+
+# Predict class labels on sub_test
+test_preds <- predict(model12_cart_sub, newdata = sub_test, type = "raw")
+
+# F1 score out of sample
+f1_score <- calculate_f1(true_labels = sub_test$poor, predicted_labels = test_preds)
+print(paste("F1-score CART:", f1_score))  # 0.59
+
+# Train CART model on full train data
+model12_cart <- train(poor ~ ., 
+                     data = train, 
+                     method = "rpart", 
+                     metric = "F", 
+                     trControl = ctrl, 
+                     tuneGrid = tune_grid_cart)
+
+model12_cart
+
+# Submission
+predictSample <- test %>% 
+  mutate(pobre = predict(model12_cart, newdata = test, type = "raw")) %>% 
+  select(id, pobre)
+
+predictSample <- predictSample %>% 
+  mutate(pobre = ifelse(pobre == "Yes", 1, 0)) %>% 
+  select(id, pobre)
+
+head(predictSample)
+
+name <- paste0("stores/submissions/12_CART_cp_0.001_SMOTE.csv") 
+write.csv(predictSample, name, row.names = FALSE)
+
+
+
+# 13) Model: Random Forest SMOTE ===============================================
+
+# Hyperparameter grid for Random Forest
+tune_grid_rf <- expand.grid(
+  mtry = c(4, 6, 8),            
+  splitrule = "gini",           
+  min.node.size = c(10, 20))  
+
+# Train Random Forest model on sub-train data
+model13_rf_sub <- train(poor ~ ., 
+                       data = sub_train, 
+                       method = "ranger",           
+                       metric = "F",               
+                       trControl = ctrl,          
+                       tuneGrid = tune_grid_rf,    
+                       num.trees = 200)             
+
+model13_rf_sub
+
+# Predict class labels on sub_test
+test_preds <- predict(model13_rf_sub, newdata = sub_test, type = "raw")
+
+# F1 score out of sample
+f1_score <- calculate_f1(true_labels = sub_test$poor, predicted_labels = test_preds)
+print(paste("F1-score Random Forest:", f1_score))  # 0.62
+
+# Train Random Forest model on full train data
+model13_rf <- train(poor ~ ., 
+                   data = train, 
+                   method = "ranger", 
+                   metric = "F", 
+                   trControl = ctrl, 
+                   tuneGrid = tune_grid_rf, 
+                   num.trees = 200)
+
+model13_rf
+
+# Submission
+predictSample <- test %>% 
+  mutate(pobre = predict(model13_rf, newdata = test, type = "raw")) %>% 
+  select(id, pobre)
+
+predictSample <- predictSample %>% 
+  mutate(pobre = ifelse(pobre == "Yes", 1, 0)) %>% 
+  select(id, pobre)
+
+head(predictSample)
+
+name <- paste0("stores/submissions/13_n200_RF_mtry_8_SMOTE.csv") 
+write.csv(predictSample, name, row.names = FALSE)
+
+
+
+# 14) Model: XGBoost SMOTE =====================================================
+
+# Hyperparameter grid for XGBoost
+tune_grid_xgb <- expand.grid(
+  nrounds = 200,         
+  max_depth = c(4, 6),            
+  eta = c(0.05, 0.1),            
+  gamma = c(0,1),                     
+  colsample_bytree = 0.8,         
+  min_child_weight = 10,         
+  subsample = 0.8               
+)
+
+# Train XGBoost model on sub-train data
+model14_xgb_sub <- train(poor ~ ., 
+                        data = sub_train, 
+                        method = "xgbTree",        
+                        metric = "F",               
+                        trControl = ctrl,       
+                        tuneGrid = tune_grid_xgb,  
+                        nthread = 4)              
+
+model14_xgb_sub
+
+# Predict class labels on sub_test
+test_preds <- predict(model14_xgb_sub, newdata = sub_test, type = "raw")
+
+# F1 score out of sample
+f1_score <- calculate_f1(true_labels = sub_test$poor, predicted_labels = test_preds)
+print(paste("F1-score XGBoost:", f1_score))  # 0.64
+
+# Train XGBoost model on full train data
+model14_xgb <- train(poor ~ ., 
+                    data = train, 
+                    method = "xgbTree", 
+                    metric = "F", 
+                    trControl = ctrl, 
+                    tuneGrid = tune_grid_xgb, 
+                    nthread = 4)
+
+model14_xgb
+
+# Submission
+predictSample <- test %>% 
+  mutate(pobre = predict(model14_xgb, newdata = test, type = "raw")) %>% 
+  select(id, pobre)
+
+predictSample <- predictSample %>% 
+  mutate(pobre = ifelse(pobre == "Yes", 1, 0)) %>% 
+  select(id, pobre)
+
+head(predictSample)
+
+name <- paste0("stores/submissions/14_XGB_n200_eta_0.1_gamma_0_SMOTE.csv") 
+write.csv(predictSample, name, row.names = FALSE)
+
+
+
+# =============================== FINAL MODELS =============================== #
 
