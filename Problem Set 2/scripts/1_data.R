@@ -176,11 +176,10 @@ head <- function(data_personas,...){
   # 4. num_old: # olds
   # 5. num_s_sec: # social security
   # 6. max_educ: max ecuation level (1-6)
-  # 7. head: 1[household head]
-  # 8. subs: # subsidies
-  # 9. num_unemp: # unemployed
-  # 10. inact: # inactives
-  # 11. fex_c_p: individual expansion factor
+  # 7. subs: # subsidies
+  # 8. num_unemp: # unemployed
+  # 9. num_inact: # inactives
+  # 10. sum_fex_c_p: individual expansion factor sum
 
 personas_hogares <- function(data_personas,...){
   info_personas <- data_personas %>%
