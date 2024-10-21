@@ -491,7 +491,6 @@ predictSample<- predictSample %>%
 head(predictSample)  
 
 name<- paste0("scripts/solo/Juan F/submisison/","EN_lambda_", "0001", "_alpha_" , "025", ".csv") 
-
 write.csv(predictSample,name, row.names = FALSE)
 
 
