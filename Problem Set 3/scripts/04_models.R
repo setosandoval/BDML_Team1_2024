@@ -173,3 +173,104 @@ rec_3 <- recipe(ln_price ~ ., data = real_train_2[, !names(real_train_2) %in% "p
   step_normalize(all_predictors())
 
 
+# ================================== MODELS ================================== #
+
+# 1) Linear Regression Model ==================================================
+
+# Linear Regression Model
+lin_reg_model <- linear_reg() %>% 
+  set_engine("lm")
+
+# Workflow for Linear Regression (sub_train)
+workflow_lin_reg_sub <- workflow() %>%
+  add_recipe(rec_1_sub) %>%
+  add_model(lin_reg_model)
+
+# Cross-validation (CV) for sub_train
+cv_results_lin_reg_sub <- fit_resamples(
+  workflow_lin_reg_sub,
+  resamples = block_folds_sub,
+  metrics = metric_set(mae),
+  control = control_resamples(save_pred = TRUE) 
+)
+
+# Save OOF predictions for superlearner
+oof_predictions_lin_reg <- collect_predictions(cv_results_lin_reg_sub) %>%
+  mutate(price_pred_oof_lin_reg = exp(.pred)) %>% 
+  select(price_pred_oof_lin_reg)
+
+# Print OOF predictions for inspection (optional)
+print(head(oof_predictions_lin_reg))
+
+# Select the best model (not critical for lm, but useful for structure)
+best_lin_reg_sub <- select_best(cv_results_lin_reg_sub, metric = "mae")
+
+# Finalize workflow for linear regression (sub_train)
+final_workflow_lin_reg_sub <- finalize_workflow(workflow_lin_reg_sub, best_lin_reg_sub)
+
+# Train the finalized workflow on the complete sub_train dataset
+final_fit_lin_reg_sub <- fit(final_workflow_lin_reg_sub, data = train)
+
+# Predict on the test set (sub_test)
+test_predictions_lin_reg_sub <- predict(final_fit_lin_reg_sub, new_data = test) %>%
+  bind_cols(test) %>%                
+  mutate(price_pred_lin_reg = exp(.pred))  
+
+# Calculate MAE for sub_test
+mae_test_lin_reg_sub <- mae(test_predictions_lin_reg_sub, truth = price, estimate = price_pred_lin_reg)
+print(mae_test_lin_reg_sub)
+
+# Save sub_test predictions for superlearner
+sub_test_predictions_lin_reg <- test_predictions_lin_reg_sub %>%
+  select(price_pred_lin_reg)
+
+#### MAE = 148
+
+# Workflow for Linear Regression (real_train)
+workflow_lin_reg <- workflow() %>%
+  add_recipe(rec_1) %>%
+  add_model(lin_reg_model)
+
+# Cross-validation (CV) for real_train
+cv_results_lin_reg <- fit_resamples(
+  workflow_lin_reg,
+  resamples = block_folds,
+  metrics = metric_set(mae),
+  control = control_resamples(save_pred = TRUE) 
+)
+
+# Save OOF predictions for real_train (optional for superlearner)
+oof_predictions_real_train <- collect_predictions(cv_results_lin_reg) %>%
+  mutate(price_pred_oof_real_train = exp(.pred)) %>%  # Convert ln_price to price
+  select(price_pred_oof_real_train)
+
+# Print OOF predictions for inspection (optional)
+print(head(oof_predictions_real_train))
+
+# Select the best model for real_train
+best_lin_reg <- select_best(cv_results_lin_reg, metric = "mae")
+
+# Finalize workflow for real_train
+final_workflow_lin_reg <- finalize_workflow(workflow_lin_reg, best_lin_reg)
+
+# Train the finalized workflow on the complete real_train dataset
+final_fit_lin_reg <- fit(final_workflow_lin_reg, data = real_train)
+
+# Predict on the real_test set
+test_predictions_lin_reg <- predict(final_fit_lin_reg, new_data = real_test) %>%
+  bind_cols(real_test) %>%                
+  mutate(price_pred_lin_reg = exp(.pred))  
+
+# Save predictions for real_test
+real_test_predictions_lin_reg <- test_predictions_lin_reg %>%
+  select(property_id, price_pred_lin_reg)
+
+# Submission file for Kaggle
+submission <- test_predictions_lin_reg %>%
+  mutate(price = round(price_pred_lin_reg, 5)) %>%  
+  select(property_id, price)
+
+write.csv(submission, "stores/submissions/1_LN.csv", row.names = FALSE)
+
+#### MAE Kaggle = 203
+
