@@ -133,5 +133,28 @@ impute_hierarchical <- function(data, variable) {
   return(data)
 }
 
+# Apply function
+data_clean <- impute_hierarchical(data_clean, "num_pisos")
+data_clean <- impute_hierarchical(data_clean, "num_parqueaderos")
+data_clean <- impute_hierarchical(data_clean, "rooms_imp")
+data_clean <- impute_hierarchical(data_clean, "bathrooms_imp")
+data_clean <- impute_hierarchical(data_clean, "area_imp")
 
+# Remove and rename variables
+data_clean <- data_clean %>%
+  select(-num_pisos,
+         -num_parqueaderos,
+         -rooms_imp,
+         -bathrooms_imp,
+         -area_imp)  %>%
+  rename(floors = num_pisos_imp,
+         parkings = num_parqueaderos_imp,
+         rooms = rooms_imp_imp,
+         bathrooms = bathrooms_imp_imp,
+         area = area_imp_imp)
+
+# Remaining missing Values
+missing_counts <- colSums(is.na(data_clean))
+missing_vars <- missing_counts[missing_counts > 0]
+missing_vars
 
