@@ -34,3 +34,57 @@ data_text <-read.csv("stores/data/raw/train_test/data_text.csv")
 data <- merge(data_location, data_text, by = "property_id", all = TRUE)
 
 
+# MISSING VALUES AND OUTLIERS ==================================================
+
+# Missing Values
+missing_counts <- colSums(is.na(data))
+missing_vars <- missing_counts[missing_counts > 0]
+missing_vars
+
+# Impute original data set missing values with values from text variables
+data$rooms_imp <-  pmin(data$rooms, data$num_habitaciones, na.rm = TRUE)
+data$bathrooms_imp <- pmin(data$bathrooms, data$num_banos, na.rm = TRUE)
+data$area_imp <- pmin(data$surface_total, data$surface_covered, data$area_m2, na.rm = TRUE)
+
+data_clean <- data %>%
+  select(-rooms,
+         -num_habitaciones,
+         -bathrooms,
+         -num_banos,
+         -surface_total,
+         -surface_covered,
+         -area_m2)
+
+# Too many missings year constructed
+data_clean <- data_clean %>%
+  select(-ano_construccion)
+
+# Missing Values
+missing_counts <- colSums(is.na(data_clean))
+missing_vars <- missing_counts[missing_counts > 0]
+missing_vars
+
+# Outliers
+table(data_clean$num_pisos)
+data_clean$num_pisos <- ifelse(data_clean$num_pisos > 50, NA, data_clean$num_pisos)
+
+table(data_clean$num_parqueaderos)
+data_clean$num_parqueaderos <- ifelse(data_clean$num_parqueaderos > 5, NA, data_clean$num_parqueaderos)
+
+table(data_clean$rooms_imp)
+data_clean$rooms_imp <- ifelse(data_clean$rooms_imp > 15, NA, data_clean$rooms_imp)
+
+table(data_clean$bathrooms_imp)
+data_clean$bathrooms_imp <- ifelse(data_clean$bathrooms_imp > 15, NA, data_clean$bathrooms_imp)
+
+table(data_clean$area_imp)
+data_clean$area_imp <- ifelse(data_clean$area_imp > 1000, NA, data_clean$area_imp)
+
+# Remaining missing Values
+missing_counts <- colSums(is.na(data_clean))
+missing_vars <- missing_counts[missing_counts > 0]
+missing_vars
+
+
+
+
