@@ -158,3 +158,22 @@ missing_counts <- colSums(is.na(data_clean))
 missing_vars <- missing_counts[missing_counts > 0]
 missing_vars
 
+
+
+# FINAL VARIABLES ==============================================================
+
+# Drop variables already used
+data_clean <- data_clean %>%
+  select(-city,
+         -title,
+         -description,
+         -cleaned_text,
+         -operation_type)
+
+# Variable indicating time period year_month
+data_clean$year_month <- paste(data_clean$year, data_clean$month, sep = "_")
+data_clean <- data_clean %>%
+  select(-year,
+         -month)
+
+
