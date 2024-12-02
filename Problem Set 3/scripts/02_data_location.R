@@ -87,3 +87,34 @@ nearest_M <- st_nearest_feature(data_sf, manz)
 data_sf <- cbind(data_sf, manz[nearest_M, c("man_dens", "man_houses", "man_per")]) 
 data_sf <- data_sf[, !names(data_sf) %in% "geometry.1"]
 
+
+
+# ESTRATO BY BLOCKS (MANZANAS) =================================================
+
+# Variables: Estrato and dummy indicating if info is missing
+
+# Manzanas (estrato) data 
+manz_est <- st_read("stores/data/raw/external/M_estratificacion") 
+manz_est <- st_transform(manz_est, crs = st_crs(data_sf))
+manz_est <- st_make_valid(manz_est)
+
+# Impute blocks (manzanas) with estrato 0 using the nearest non-zero value
+manz_est$ESTRATO_corr <- manz_est$ESTRATO
+manzanas_zero <- manz_est[manz_est$ESTRATO == 0, ]
+manzanas_non_zero <- manz_est[manz_est$ESTRATO != 0, ]
+nearest_M_z <- st_nearest_feature(manzanas_zero, manzanas_non_zero)
+manz_est$ESTRATO_corr[manz_est$ESTRATO == 0] <- manzanas_non_zero$ESTRATO[nearest_M_z]
+
+# Variable indicating no estrato info
+manz_est$info_estrato <- ifelse(manz_est$ESTRATO != 0, 1, 0)
+
+# Rename variables
+manz_est <- manz_est %>%
+  rename(id_manz = CODIGO_MAN, 
+         estrato = ESTRATO_corr)
+
+# Assign block (manzana) and its estrato to each property
+nearest_M_est <- st_nearest_feature(data_sf, manz_est) 
+data_sf <- cbind(data_sf, manz_est[nearest_M_est, c("id_manz", "estrato", "info_estrato")]) 
+data_sf <- data_sf[, !names(data_sf) %in% "geometry.1"]
+
