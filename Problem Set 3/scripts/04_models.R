@@ -387,3 +387,199 @@ write.csv(submission_enet, "stores/submissions/2_EN_lambda_1_alpha_0.csv", row.n
 
 #### MAE Kaggle = 206
 
+
+
+# 3) LightGBM  =================================================================
+
+# Define the LightGBM model for tuning
+lightgbm_model <- boost_tree(
+  trees = 500,            # Maximum number of trees
+  tree_depth = tune(),    # Tune tree depth
+  min_n = tune(),         # Tune minimum node size
+  learn_rate = tune(),    # Tune learning rate
+) %>%
+  set_engine("lightgbm") %>%
+  set_mode("regression")
+
+# Workflow for LightGBM (sub_train)
+workflow_lightgbm_sub <- workflow() %>%
+  add_recipe(rec_3_sub) %>%
+  add_model(lightgbm_model)
+
+# Define hyperparameter grid for LightGBM 
+lightgbm_grid <- expand.grid(
+  tree_depth = c(3, 5, 7),       
+  min_n = c(10, 15, 20, 30),         
+  learn_rate = c(0.05, 0.1, 0.2) 
+)
+
+# Cross-validation tuning for LightGBM (sub_train)
+tune_results_lightgbm_sub <- tune_grid(
+  workflow_lightgbm_sub,
+  resamples = block_folds_sub_2,
+  grid = lightgbm_grid,
+  metrics = metric_set(mae),
+  control = control_grid(save_pred = TRUE)  
+)
+
+# Save OOF predictions for superlearner
+oof_predictions_lightgbm <- collect_predictions(tune_results_lightgbm_sub) %>%
+  mutate(price_pred_oof_lightgbm = exp(.pred)) %>%  
+  select(price_pred_oof_lightgbm)
+
+# Print OOF predictions for inspection (optional)
+print(head(oof_predictions_lightgbm))
+
+# Select the best hyperparameters for LightGBM (sub_train)
+best_lightgbm_sub <- select_best(tune_results_lightgbm_sub, metric = "mae")
+print(best_lightgbm_sub)  # Display best hyperparameters (even if fixed)
+
+# Finalize workflow for LightGBM (sub_train)
+final_workflow_lightgbm_sub <- finalize_workflow(workflow_lightgbm_sub, best_lightgbm_sub)
+
+# Train the finalized workflow on the complete sub_train dataset
+final_fit_lightgbm_sub <- fit(final_workflow_lightgbm_sub, data = train_2)
+
+# Predict on the test set (sub_test)
+test_predictions_lightgbm_sub <- predict(final_fit_lightgbm_sub, new_data = test_2) %>%
+  bind_cols(test_2) %>%
+  mutate(price_pred_lightgbm = exp(.pred))  
+
+# Calculate MAE for sub_test
+mae_test_lightgbm_sub <- mae(test_predictions_lightgbm_sub, truth = price, estimate = price_pred_lightgbm)
+print(mae_test_lightgbm_sub)
+
+#### MAE = 82
+
+# Save sub_test predictions for superlearner
+sub_test_predictions_lightgbm <- test_predictions_lightgbm_sub %>%
+  select(price_pred_lightgbm)
+
+# Workflow for LightGBM (real_train)
+workflow_lightgbm <- workflow() %>%
+  add_recipe(rec_3) %>%
+  add_model(lightgbm_model)
+
+# Cross-validation (CV) for real_train
+tune_results_lightgbm <- tune_grid(
+  workflow_lightgbm,
+  resamples = block_folds_2,
+  grid = lightgbm_grid,
+  metrics = metric_set(mae),
+  control = control_grid(save_pred = TRUE) 
+)
+
+# Save OOF predictions for real_train (optional for superlearner)
+oof_predictions_real_train_lightgbm <- collect_predictions(tune_results_lightgbm) %>%
+  mutate(price_pred_oof_real_train_lightgbm = exp(.pred)) %>% 
+  select(price_pred_oof_real_train_lightgbm)
+
+# Print OOF predictions for inspection (optional)
+print(head(oof_predictions_real_train_lightgbm))
+
+# Select the best hyperparameters for LightGBM (real_train)
+best_lightgbm <- select_best(tune_results_lightgbm, metric = "mae")
+print(best_lightgbm)  # Display best hyperparameters (even if fixed)
+
+# Finalize workflow for LightGBM (real_train)
+final_workflow_lightgbm <- finalize_workflow(workflow_lightgbm, best_lightgbm)
+
+# Train the finalized workflow on the complete real_train dataset
+final_fit_lightgbm <- fit(final_workflow_lightgbm, data = real_train_2)
+
+# Predict on the real_test set
+test_predictions_lightgbm <- predict(final_fit_lightgbm, new_data = real_test) %>%
+  bind_cols(real_test) %>%
+  mutate(price_pred_lightgbm = exp(.pred))  
+
+# Save predictions for real_test
+real_test_predictions_lightgbm <- test_predictions_lightgbm %>%
+  select(property_id, price_pred_lightgbm)
+
+# Submission file for Kaggle
+submission_lightgbm <- test_predictions_lightgbm %>%
+  mutate(price = round(price_pred_lightgbm, 5)) %>%  
+  select(property_id, price)
+
+write.csv(submission_lightgbm, "stores/submissions/4_LightGBM_ntrees_500_minn_30_treedepth_5_lr_0.05.csv", row.names = FALSE)
+
+#### MAE Kaggle = 188
+
+# Graph variable importance
+
+# Extraer el modelo LightGBM desde el `final_fit_lightgbm`
+lightgbm_model_object <- extract_fit_engine(final_fit_lightgbm)
+
+# Obtener la importancia de las variables
+variable_importance <- lgb.importance(lightgbm_model_object)
+
+# Convertir a un dataframe para ggplot2
+variable_importance_df <- as_tibble(variable_importance)
+
+# Graficar la importancia de las variables
+ggplot(variable_importance_df, aes(x = reorder(Feature, Gain), y = Gain)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Rotar el gráfico
+  labs(
+    title = "Variable Importance",
+    x = "Features",
+    y = "Gain",
+    caption = "Source: LightGBM Model"
+  ) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title = element_text(face = "bold")
+  )
+
+# Filtrar las primeras 40 variables más importantes
+top_30_variables <- variable_importance_df %>% 
+  slice_max(order_by = Gain, n = 30)
+
+top_30_variables <- subset(top_30_variables, !(Feature == "lat" | Feature == "lon"))
+
+corrections <- c(
+  "bathrooms" = "Bathrooms",
+  "area" = "Area",
+  "parkings" = "Parkings",
+  "bedrooms" = "Bedrooms",
+  "property_type.Apartamento" = "Property Type: Apartamento",
+  "estrato.6" = "Estrato 6",
+  "estrato.3" = "Estrato 3",
+  "estrato.5" = "Estrato 5",
+  "estrato.4" = "Estrato 4",
+  "man_dens" = "Manzana's Density",
+  "dist_station" = "Distance to Station",
+  "dist_cycle" = "Distance to Cycle Path",
+  "dist_mall" = "Distance to Mall",
+  "dist_highway" = "Distance to Highway",
+  "dist_school" = "Distance to School",
+  "id_UPZ.16" = "UPZ ID 16",
+  "val_cat" = "Valution Catastro"
+)
+
+# Corregir nombres con dplyr
+top_30_variables <- top_30_variables %>%
+  mutate(
+    name = case_when(
+      Feature %in% names(corrections) ~ corrections[Feature],
+      grepl("^PC[0-9]+$", Feature) ~ Feature, # Mantener PC# como está
+      TRUE ~ Feature # Para casos no especificados, mantener original
+    )
+  )
+
+# Graficar la importancia de las variables
+graph <- ggplot(top_30_variables, aes(x = reorder(name, Gain), y = Gain)) +
+  geom_bar(stat = "identity", fill = "darkred") +
+  coord_flip() +  # Rotar el gráfico
+  labs(x = "Features", y = "Gain",
+  ) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title = element_text(face = "bold")
+  )
+
+ggsave("views/figure0.pdf", graph, width = 10, height = 8, dpi = 300)
+
+
