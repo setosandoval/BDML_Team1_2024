@@ -59,8 +59,4 @@ UPZ <- UPZ %>%
   rename(id_UPZ = codigo_upz, 
          id_local = codigo_loca)
 
-# Assign localidad ans UPZ to each property
-nearest_UPZ <- st_nearest_feature(data_sf, UPZ) 
-data_sf <- cbind(data_sf, UPZ[nearest_UPZ, c("id_UPZ", "id_local")])
-data_sf <- data_sf[, !names(data_sf) %in% "geometry.1"]
 
