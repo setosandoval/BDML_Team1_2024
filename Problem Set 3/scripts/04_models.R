@@ -105,3 +105,71 @@ split <- createDataPartition(real_train_2$price, p = 0.8, list = FALSE)
 train_2 <- real_train[split, ]
 test_2 <- real_train[-split, ]
 
+
+
+# RECIPES SETTINGS =============================================================
+
+# Function to create spatial cross-validation folds
+create_spatial_cv <- function(data, v = 5) {
+  # Ensure the data is an sf object
+  data_sf <- st_as_sf(data, coords = c("lon", "lat"), crs = 4326)
+  
+  # Add lat and lon columns before dropping geometry
+  data_sf <- data_sf %>%
+    mutate(lon = st_coordinates(.)[, 1],  
+           lat = st_coordinates(.)[, 2])
+  
+  # Create spatial folds
+  folds <- spatial_block_cv(data_sf, v = v)
+  
+  # Drop geometry after extracting coordinates
+  data_clean <- st_drop_geometry(data_sf)
+  
+  return(list(data = data_clean, folds = folds))
+}
+
+# Prepare cross-validation folds
+cv_sub <- create_spatial_cv(train)
+train <- cv_sub$data
+block_folds_sub <- cv_sub$folds
+
+cv_real <- create_spatial_cv(real_train)
+real_train <- cv_real$data
+block_folds <- cv_real$folds
+
+cv_sub_2 <- create_spatial_cv(train_2)
+train_2 <- cv_sub$data
+block_folds_sub_2 <- cv_sub$folds
+
+cv_real_2 <- create_spatial_cv(real_train_2)
+real_train_2 <- cv_real$data
+block_folds_2 <- cv_real$folds
+
+# Recipe 1: lnPrice = f(X). With dummies and normalized variables
+rec_1_sub <- recipe(ln_price ~ ., data = train[, !names(train) %in% "price"]) %>%
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_predictors())
+
+rec_1 <- recipe(ln_price ~ ., data = real_train[, !names(real_train) %in% "price"]) %>%
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_predictors())
+
+# Recipe 2: Price = f(X). With dummies and normalized variables
+rec_2_sub <- recipe(price ~ ., data = train[, !names(train) %in% "ln_price"]) %>%
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_predictors())
+
+rec_2 <- recipe(price ~ ., data = real_train[, !names(real_train) %in% "ln_price"]) %>%
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_predictors())
+
+# Recipe 3: lnPrice = f(X). 
+rec_3_sub <- recipe(ln_price ~ ., data = train_2[, !names(train_2) %in% "price"]) %>%
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_predictors())
+
+rec_3 <- recipe(ln_price ~ ., data = real_train_2[, !names(real_train_2) %in% "price"]) %>%
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_predictors())
+
+
