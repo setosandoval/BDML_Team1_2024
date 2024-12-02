@@ -14,7 +14,7 @@
 # ENVIRONMENT SETUP AND DATA UPLOADING =========================================
 
 # Set working directory
-setwd("/Users/setosandoval/Documents/Problem Set 3")
+setwd("C:/Users/User/Documents/RepBDML2/BDML_Team1_2024/Problem Set 3/scripts")
 
 # Clean the environment
 rm(list = ls())
