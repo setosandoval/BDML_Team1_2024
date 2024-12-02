@@ -177,3 +177,24 @@ data_clean <- data_clean %>%
          -month)
 
 
+# FINAL MERGED DATA SET ========================================================
+
+# PC data
+PC_light <- read.csv("stores/data/raw/train_test/PC_light.csv")
+PC_med <- read.csv("stores/data/raw/train_test/PC_med.csv")
+PC_large <- read.csv("stores/data/raw/train_test/PC_large.csv")
+
+# Merged data
+data_light <- merge(data_clean, PC_light, by = "property_id", all = TRUE)
+data_med <- merge(data_clean, PC_med, by = "property_id", all = TRUE)
+data_large <- merge(data_clean, PC_large, by = "property_id", all = TRUE)
+
+# Export data
+write.csv(data_light, "stores/data/work/data_light.csv", row.names = F)
+write.csv(data_med, "stores/data/work/data_med.csv", row.names = F)
+write.csv(data_large, "stores/data/work/data_large.csv", row.names = F)
+
+
+
+
+
