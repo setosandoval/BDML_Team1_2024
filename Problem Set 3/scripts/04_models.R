@@ -274,3 +274,116 @@ write.csv(submission, "stores/submissions/1_LN.csv", row.names = FALSE)
 
 #### MAE Kaggle = 203
 
+
+# 2) Elastic Net Model =======================================================
+
+# Elastic Net Model
+elastic_net_model <- linear_reg(penalty = tune(), mixture = tune()) %>% 
+  set_engine("glmnet")
+
+# Workflow for Elastic Net (sub_train)
+workflow_enet_sub <- workflow() %>%
+  add_recipe(rec_2_sub) %>%
+  add_model(elastic_net_model)
+
+# Define hyperparameter grid for Elastic Net
+enet_grid <- grid_regular(
+  penalty(range = c(0, 1)),  
+  mixture(range = c(0, 0.1)),   
+  levels = 50                    
+)
+
+# Cross-validation tuning for Elastic Net (sub_train)
+tune_results_enet_sub <- tune_grid(
+  workflow_enet_sub,
+  resamples = block_folds_sub,
+  grid = enet_grid,
+  metrics = metric_set(mae),
+  control = control_grid(save_pred = TRUE)
+)
+
+# Save OOF predictions for superlearner
+oof_predictions_enet <- collect_predictions(tune_results_enet_sub) %>%
+  mutate(price_pred_oof_enet = .pred) %>%  # Convert ln_price to price
+  select(price_pred_oof_enet)
+
+# Print OOF predictions for inspection (optional)
+print(head(oof_predictions_enet))
+
+# Select the best hyperparameters for Elastic Net
+best_enet_sub <- select_best(tune_results_enet_sub, metric = "mae")
+
+# Finalize workflow for Elastic Net (sub_train)
+final_workflow_enet_sub <- finalize_workflow(workflow_enet_sub, best_enet_sub)
+
+# Train the finalized workflow on the complete sub_train dataset
+final_fit_enet_sub <- fit(final_workflow_enet_sub, data = train)
+
+# Predict on the test set (sub_test)
+test_predictions_enet_sub <- predict(final_fit_enet_sub, new_data = test) %>%
+  bind_cols(test) %>%
+  mutate(price_pred_enet = .pred)  # Convert ln_price to price
+
+# Calculate MAE for sub_test
+mae_test_enet_sub <- mae(test_predictions_enet_sub, truth = price, estimate = price_pred_enet)
+print(mae_test_enet_sub)
+
+#### MAE = 156
+
+# Save sub_test predictions for superlearner
+sub_test_predictions_enet <- test_predictions_enet_sub %>%
+  select(price_pred_enet)
+
+# Workflow for Elastic Net (real_train)
+workflow_enet <- workflow() %>%
+  add_recipe(rec_2) %>%
+  add_model(elastic_net_model)
+
+# Cross-validation tuning for Elastic Net (real_train)
+tune_results_enet <- tune_grid(
+  workflow_enet,
+  resamples = block_folds,
+  grid = enet_grid,
+  metrics = metric_set(mae),
+  control = control_grid(save_pred = TRUE)
+)
+
+# Save OOF predictions for real_train (optional for superlearner)
+oof_predictions_real_train_enet <- collect_predictions(tune_results_enet) %>%
+  mutate(price_pred_oof_real_train_enet = .pred) %>%  # Convert ln_price to price
+  select(price_pred_oof_real_train_enet)
+
+# Print OOF predictions for inspection (optional)
+print(head(oof_predictions_real_train_enet))
+
+# Select the best hyperparameters for Elastic Net (real_train)
+best_enet <- select_best(tune_results_enet, metric = "mae")
+
+# Finalize workflow for Elastic Net (real_train)
+final_workflow_enet <- finalize_workflow(workflow_enet, best_enet)
+
+# Train the finalized workflow on the complete real_train dataset
+final_fit_enet <- fit(final_workflow_enet, data = real_train)
+
+# Predict on the real_test set
+test_predictions_enet <- predict(final_fit_enet, new_data = real_test) %>%
+  bind_cols(real_test) %>%
+  mutate(price_pred_enet = .pred) 
+
+# Save predictions for real_test
+real_test_predictions_enet <- test_predictions_enet %>%
+  select(property_id, price_pred_enet)
+
+# Submission file for Kaggle
+submission_enet <- test_predictions_enet %>%
+  mutate(price = round(price_pred_enet, 5)) %>% 
+  select(property_id, price)
+
+# Inspect the best hyperparameters for Elastic Net (real_train)
+best_hyperparameters_enet <- select_best(tune_results_enet, metric = "mae")
+print(best_hyperparameters_enet)
+
+write.csv(submission_enet, "stores/submissions/2_EN_lambda_1_alpha_0.csv", row.names = FALSE)
+
+#### MAE Kaggle = 206
+
