@@ -85,6 +85,53 @@ missing_counts <- colSums(is.na(data_clean))
 missing_vars <- missing_counts[missing_counts > 0]
 missing_vars
 
+# IMPUTATION ===================================================================
+
+# Function to impute missing values hierarchically
+impute_hierarchical <- function(data, variable) {
+  # Create the name for the new imputed variable
+  variable_imp <- paste0(variable, "_imp")
+  
+  # 1. Impute by id_manz
+  data <- data %>%
+    group_by(id_manz) %>%
+    mutate(!!variable_imp := ifelse(
+      is.na(.data[[variable]]),
+      median(.data[[variable]], na.rm = TRUE),  # Median by id_manz
+      .data[[variable]]  # Keep original value if not NA
+    )) %>%
+    ungroup()
+  
+  # 2. Impute by id_UPZ
+  data <- data %>%
+    group_by(id_UPZ) %>%
+    mutate(!!variable_imp := ifelse(
+      is.na(.data[[variable_imp]]),
+      median(.data[[variable_imp]], na.rm = TRUE),  # Median by id_UPZ
+      .data[[variable_imp]]  # Keep the existing value
+    )) %>%
+    ungroup()
+  
+  # 3. Impute by id_local
+  data <- data %>%
+    group_by(id_local) %>%
+    mutate(!!variable_imp := ifelse(
+      is.na(.data[[variable_imp]]),
+      median(.data[[variable_imp]], na.rm = TRUE),  # Median by id_local
+      .data[[variable_imp]]  # Keep the existing value
+    )) %>%
+    ungroup()
+  
+  # 4. Impute with overall median
+  data <- data %>%
+    mutate(!!variable_imp := ifelse(
+      is.na(.data[[variable_imp]]),
+      median(.data[[variable_imp]], na.rm = TRUE),  # Overall median
+      .data[[variable_imp]]  # Keep the existing value
+    ))
+  
+  return(data)
+}
 
 
 
