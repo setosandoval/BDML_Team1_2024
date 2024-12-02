@@ -583,3 +583,159 @@ graph <- ggplot(top_30_variables, aes(x = reorder(name, Gain), y = Gain)) +
 ggsave("views/figure0.pdf", graph, width = 10, height = 8, dpi = 300)
 
 
+# 4) Neural Network  ===========================================================
+
+# Define a Neural Network Model with `keras`
+build_nn <- function(input_shape) {
+  model <- keras_model_sequential() %>%
+    layer_dense(units = 128, activation = "tanh", input_shape = input_shape) %>%
+    layer_dropout(rate = 0.2) %>%  
+    layer_dense(units = 64, activation = "relu") %>%
+    layer_dropout(rate = 0.1) %>%  
+    layer_dense(units = 1, activation = "linear") 
+  model %>% compile(
+    optimizer = optimizer_adam(learning_rate = 0.001),
+    loss = "mean_squared_error",
+    metrics = list("mean_absolute_error")
+  )
+  return(model)
+}
+
+# Define a parsnip model with keras
+nn_model <- mlp(
+  epochs = 50,           
+  hidden_units = NULL,      
+  penalty = NULL,         
+  activation = "relu"     
+) %>%
+  set_engine("keras", build_fn = build_nn) %>%
+  set_mode("regression")
+
+# Workflow for Neural Network (sub_train)
+workflow_nn_sub <- workflow() %>%
+  add_recipe(rec_3_sub) %>%
+  add_model(nn_model)
+
+# Cross-validation (CV) for sub_train
+cv_results_nn_sub <- fit_resamples(
+  workflow_nn_sub,
+  resamples = block_folds_sub,
+  metrics = metric_set(mae),
+  control = control_resamples(save_pred = TRUE)  
+)
+
+# Save OOF predictions for superlearner
+oof_predictions_nn <- collect_predictions(cv_results_nn_sub) %>%
+  mutate(price_pred_oof_nn = .pred) %>%  
+  select(price_pred_oof_nn)
+
+# Print OOF predictions for inspection (optional)
+print(head(oof_predictions_nn))
+
+# Select the best model (not needed as no tuning, but included for structure)
+best_nn_sub <- select_best(cv_results_nn_sub, metric = "mae")
+
+# Finalize workflow for Neural Network (sub_train)
+final_workflow_nn_sub <- finalize_workflow(workflow_nn_sub, best_nn_sub)
+
+# Train the finalized workflow on the complete sub_train dataset
+final_fit_nn_sub <- fit(final_workflow_nn_sub, data = train)
+
+# Predict on the test set (sub_test)
+test_predictions_nn_sub <- predict(final_fit_nn_sub, new_data = test) %>%
+  bind_cols(test) %>%
+  mutate(price_pred_nn = exp(.pred))  
+
+# Calculate MAE for sub_test
+mae_test_nn_sub <- mae(test_predictions_nn_sub, truth = price, estimate = price_pred_nn)
+print(mae_test_nn_sub)
+
+#### MAE = 136
+
+# Save sub_test predictions for superlearner
+sub_test_predictions_nn <- test_predictions_nn_sub %>%
+  select(price_pred_nn)
+
+# Workflow for Neural Network (real_train)
+workflow_nn <- workflow() %>%
+  add_recipe(rec_1) %>%
+  add_model(nn_model)
+
+# Cross-validation (CV) for real_train
+cv_results_nn <- fit_resamples(
+  workflow_nn,
+  resamples = block_folds,
+  metrics = metric_set(mae),
+  control = control_resamples(save_pred = TRUE)  
+)
+
+# Save OOF predictions for real_train (optional for superlearner)
+oof_predictions_real_train_nn <- collect_predictions(cv_results_nn) %>%
+  mutate(price_pred_oof_real_train_nn = exp(.pred)) %>%  
+  select(price_pred_oof_real_train_nn)
+
+# Print OOF predictions for inspection (optional)
+print(head(oof_predictions_real_train_nn))
+
+# Finalize workflow for Neural Network (real_train)
+final_workflow_nn <- finalize_workflow(workflow_nn, best_nn_sub)
+
+# Train the finalized workflow on the complete real_train dataset
+final_fit_nn <- fit(final_workflow_nn, data = real_train)
+
+# Predict on the real_test set
+test_predictions_nn <- predict(final_fit_nn, new_data = real_test) %>%
+  bind_cols(real_test) %>%
+  mutate(price_pred_nn = exp(.pred)) 
+
+# Save predictions for real_test
+real_test_predictions_nn <- test_predictions_nn %>%
+  select(property_id, price_pred_nn)
+
+# Submission file for Kaggle
+submission_nn <- test_predictions_nn %>%
+  mutate(price = round(price_pred_nn, 5)) %>%  
+  select(property_id, price)
+
+write.csv(submission_nn, "stores/submissions/5_NN_layer_2_unit_128_64_dropout_0.2_0.1.csv", row.names = FALSE)
+
+
+
+# 5) Super Learner  ============================================================
+
+# Combine OOF predictions into a single data frame
+oof_data <- data.frame(
+  price = train$price,  # True price values from the training set
+  lin_reg = oof_predictions_lin_reg$price_pred_oof_lin_reg,
+  elastic_net = oof_predictions_enet$price_pred_oof_enet,
+  lightgbm = oof_predictions_lightgbm$price_pred_oof_lightgbm,
+  nn = oof_predictions_nn$price_pred_oof_nn
+)
+
+# Fit a linear regression model on the OOF predictions
+super_learner_model <- lm(price ~ ., data = oof_data)
+
+# Print summary of the super learner model (optional)
+print(summary(super_learner_model))
+
+# Combine real_test predictions into a single data frame
+real_test_predictions <- data.frame(
+  lin_reg = real_test_predictions_lin_reg$price_pred_lin_reg,
+  elastic_net = real_test_predictions_enet$price_pred_enet,
+  lightgbm = real_test_predictions_lightgbm$price_pred_lightgbm,
+  nn = real_test_predictions_nn$price_pred_nn
+)
+
+# Use the super learner model to predict on real_test
+super_learner_predictions <- predict(super_learner_model, newdata = real_test_predictions)
+
+# Create submission file for Kaggle
+submission_super_learner <- data.frame(
+  property_id = real_test$property_id,
+  price = round(super_learner_predictions, 5)  
+)
+
+write.csv(submission_super_learner, "stores/submissions/6_SuperLearner_LN_EN_LGB_NN.csv", row.names = FALSE)
+
+#### MAE Kaggle = 183
+
