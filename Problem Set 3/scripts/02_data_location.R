@@ -118,3 +118,24 @@ nearest_M_est <- st_nearest_feature(data_sf, manz_est)
 data_sf <- cbind(data_sf, manz_est[nearest_M_est, c("id_manz", "estrato", "info_estrato")]) 
 data_sf <- data_sf[, !names(data_sf) %in% "geometry.1"]
 
+
+
+# PROPERTY VALUATION FROM CATSTRO BY BLOCKS (MANZANAS) =========================
+
+# Variables: Catastro and comervial valuation of properties per block
+
+# Manzanas (property valuation) data
+manz_val <- st_read("stores/data/raw/external/M_valuation") 
+manz_val <- st_transform(manz_val, crs = st_crs(data_sf))
+manz_val <- st_make_valid(manz_val)
+
+# Rename variables
+manz_val <- manz_val %>%
+  rename(val_com = AVALUO_COM, 
+         val_cat = AVALUO_CAT)
+
+# Assign catastro and comercial valuation to each property by block (manzana)
+nearest_M_val <- st_nearest_feature(data_sf, manz_val) 
+data_sf <- cbind(data_sf, manz_val[nearest_M_val, c("val_cat", "val_com")]) 
+data_sf <- data_sf[, !names(data_sf) %in% "geometry.1"]
+
