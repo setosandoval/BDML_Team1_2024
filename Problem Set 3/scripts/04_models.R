@@ -739,3 +739,134 @@ write.csv(submission_super_learner, "stores/submissions/6_SuperLearner_LN_EN_LGB
 
 #### MAE Kaggle = 183
 
+
+
+# 6) XGBoost Model ============================================================
+
+# XGBoost Model
+xgboost_model <- boost_tree(
+  trees = 500,            
+  tree_depth = tune(),    
+  min_n = tune(),         
+  learn_rate = tune(),    
+  loss_reduction = tune(), 
+  sample_size = tune()     
+) %>%
+  set_engine("xgboost") %>%
+  set_mode("regression")
+
+# Workflow for XGBoost (sub_train)
+workflow_xgb_sub <- workflow() %>%
+  add_recipe(rec_1_sub) %>%
+  add_model(xgboost_model)
+
+# Define hyperparameter grid for XGBoost
+xgb_grid <- expand.grid(
+  tree_depth = c(6, 8),    
+  min_n = c(15, 30),          
+  learn_rate = c(0.05, 0.1), 
+  loss_reduction = 0.01,    
+  sample_size = 0.8           
+)
+
+# Control settings for verbose output
+control_verbose <- control_grid(
+  verbose = TRUE,        
+  save_pred = TRUE,     
+  save_workflow = TRUE   
+)
+
+# Cross-validation tuning for XGBoost (sub_train)
+tune_results_xgb_sub <- tune_grid(
+  workflow_xgb_sub,
+  resamples = block_folds_sub,
+  grid = xgb_grid,
+  metrics = metric_set(mae),
+  control = control_verbose
+)
+
+# Save OOF predictions for superlearner
+oof_predictions_xgb <- collect_predictions(tune_results_xgb_sub) %>%
+  mutate(price_pred_oof_xgb = exp(.pred)) %>%  
+  select(price_pred_oof_xgb)
+
+# Print OOF predictions for inspection (optional)
+print(head(oof_predictions_xgb))
+
+# Select the best hyperparameters for XGBoost (sub_train)
+best_xgb_sub <- select_best(tune_results_xgb_sub, metric = "mae")
+print(best_xgb_sub)  
+
+# Finalize workflow for XGBoost (sub_train)
+final_workflow_xgb_sub <- finalize_workflow(workflow_xgb_sub, best_xgb_sub)
+
+# Train the finalized workflow on the complete sub_train dataset
+final_fit_xgb_sub <- fit(final_workflow_xgb_sub, data = train)
+
+# Predict on the test set (sub_test)
+test_predictions_xgb_sub <- predict(final_fit_xgb_sub, new_data = test) %>%
+  bind_cols(test) %>%
+  mutate(price_pred_xgb = exp(.pred))  
+
+# Calculate MAE for sub_test
+mae_test_xgb_sub <- mae(test_predictions_xgb_sub, truth = price, estimate = price_pred_xgb)
+print(mae_test_xgb_sub)
+
+#### MAE Kaggle = 92
+
+# Save sub_test predictions for superlearner
+sub_test_predictions_xgb <- test_predictions_xgb_sub %>%
+  select(price_pred_xgb)
+
+# Workflow for XGBoost (real_train)
+workflow_xgb <- workflow() %>%
+  add_recipe(rec_1) %>%
+  add_model(xgboost_model)
+
+# Cross-validation tuning for XGBoost (real_train)
+tune_results_xgb <- tune_grid(
+  workflow_xgb,
+  resamples = block_folds,
+  grid = xgb_grid,
+  metrics = metric_set(mae),
+  control = control_verbose
+)
+
+# Save OOF predictions for real_train (optional for superlearner)
+oof_predictions_real_train_xgb <- collect_predictions(tune_results_xgb) %>%
+  mutate(price_pred_oof_real_train_xgb = exp(.pred)) %>%  
+  select(price_pred_oof_real_train_xgb)
+
+# Print OOF predictions for inspection (optional)
+print(head(oof_predictions_real_train_xgb))
+
+# Select the best hyperparameters for XGBoost (real_train)
+best_xgb <- select_best(tune_results_xgb, metric = "mae")
+print(best_xgb) 
+
+# Finalize workflow for XGBoost (real_train)
+final_workflow_xgb <- finalize_workflow(workflow_xgb, best_xgb)
+
+# Train the finalized workflow on the complete real_train dataset
+final_fit_xgb <- fit(final_workflow_xgb, data = real_train)
+
+# Predict on the real_test set
+test_predictions_xgb <- predict(final_fit_xgb, new_data = real_test) %>%
+  bind_cols(real_test) %>%
+  mutate(price_pred_xgb = exp(.pred))  
+
+# Save predictions for real_test
+real_test_predictions_xgb <- test_predictions_xgb %>%
+  select(property_id, price_pred_xgb)
+
+# Submission file for Kaggle
+submission_xgb <- test_predictions_xgb %>%
+  mutate(price = round(price_pred_xgb, 5)) %>% 
+  select(property_id, price)
+
+write.csv(submission_xgb, "stores/submissions/3_XGB_ntrees_500_minn_30_treedepth_6.csv", row.names = FALSE)
+
+#### MAE Kaggle = 200
+
+
+
