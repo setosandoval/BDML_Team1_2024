@@ -284,3 +284,7 @@ Problem Set 2/stores/data/raw/test_hogares.csv
 Problem Set 2/stores/data/raw/train_hogares.csv
 Problem Set 2/stores/data/raw/test_personas.csv
 Problem Set 2/stores/submissions/sample_submission.csv
+Problem Set 3/stores/data/raw/train_test/data_text.csv
+Problem Set 3/stores/data/raw/train_test/PC_large.csv
+Problem Set 3/stores/data/raw/train_test/PC_light.csv
+Problem Set 3/stores/data/raw/train_test/PC_med.csv
