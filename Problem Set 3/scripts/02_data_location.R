@@ -59,4 +59,31 @@ UPZ <- UPZ %>%
   rename(id_UPZ = codigo_upz, 
          id_local = codigo_loca)
 
+# Assign localidad ans UPZ to each property
+nearest_UPZ <- st_nearest_feature(data_sf, UPZ) 
+data_sf <- cbind(data_sf, UPZ[nearest_UPZ, c("id_UPZ", "id_local")])
+data_sf <- data_sf[, !names(data_sf) %in% "geometry.1"]
+
+
+
+# BLOCKS (MANZANAS) INFO =======================================================
+
+# Variables: Density, number of properties for living and number of persons per block
+
+# Manzanas data 
+manz <- st_read("stores/data/raw/external/M_info") %>%
+  select(MPIO_CDPMP, DENSIDAD, TVIVIENDA, TP27_PERSO) %>%  
+  filter(MPIO_CDPMP == "11001") %>% # Bogotá
+  st_transform(manz_est, crs = st_crs(data_sf))
+
+# Rename variables
+manz <- manz %>%
+  rename(man_dens = DENSIDAD, 
+         man_houses = TVIVIENDA,
+         man_per = TP27_PERSO)
+
+# Assign block (manzana) and its estrato to each property
+nearest_M <- st_nearest_feature(data_sf, manz) 
+data_sf <- cbind(data_sf, manz[nearest_M, c("man_dens", "man_houses", "man_per")]) 
+data_sf <- data_sf[, !names(data_sf) %in% "geometry.1"]
 
