@@ -1,0 +1,13 @@
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+\textbf{Model} & \textbf{MAE Kaggle} & \textbf{Hyperparameters} \\ \hline
+Linear Regression & Row 1, Col 2 & Default settings \\ \hline
+Elastic Net & Row 2, Col 2 & Lambda: 1, Alpha: 0 \\ \hline
+LightGBM & Row 3, Col 2 & Ntrees: 500, Min N: 30, Treedepth: 5, LR: 0.05 \\ \hline
+Neural Network & Row 4, Col 2 & Layers: 2, Units: 128-64, Dropout: 0.2, 0.1 \\ \hline
+SuperLearner & Row 5, Col 2 & Base Models: LN, EN, LGB, NN \\ \hline
+\end{tabular}
+\caption{Models Performance: MAE Kaggle Score and Hyperparameters}
+\end{table}
